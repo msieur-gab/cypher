@@ -8,8 +8,10 @@ export class TerminalMain extends LitElement {
   static properties = {
     profile: { type: Object },
     peerService: { type: Object },
+    pendingCommands: { type: Array },
     _output: { type: Array, state: true },
     _cwd: { type: String, state: true },
+    _processedCount: { type: Number, state: true },
   };
 
   // Virtual file system structure
@@ -125,9 +127,22 @@ export class TerminalMain extends LitElement {
     super();
     this._output = [];
     this._cwd = '/';
+    this._processedCount = 0;
+    this.pendingCommands = [];
   }
 
-  addCommandOutput(text) {
+  updated(changedProps) {
+    if (changedProps.has('pendingCommands') && this.pendingCommands) {
+      // Process any new commands
+      while (this._processedCount < this.pendingCommands.length) {
+        const cmd = this.pendingCommands[this._processedCount];
+        this._processCommand(cmd.text);
+        this._processedCount++;
+      }
+    }
+  }
+
+  _processCommand(text) {
     // Parse and execute command
     const result = this._executeCommand(text);
 
@@ -138,9 +153,7 @@ export class TerminalMain extends LitElement {
       isError: result.isError
     }];
 
-    this.requestUpdate();
-
-    // Auto-scroll
+    // Auto-scroll after update
     this.updateComplete.then(() => {
       const output = this.shadowRoot.querySelector('.terminal-output');
       if (output) output.scrollTop = output.scrollHeight;

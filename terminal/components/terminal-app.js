@@ -15,6 +15,7 @@ export class TerminalApp extends LitElement {
     sessionId: { type: String },
     agentUrl: { type: String },
     profile: { type: Object },
+    _pendingCommands: { type: Array, state: true },
   };
 
   static styles = css`
@@ -50,6 +51,7 @@ export class TerminalApp extends LitElement {
     this.sessionId = this._generateSessionId();
     this.agentUrl = this._buildAgentUrl();
     this.profile = null;
+    this._pendingCommands = [];
     this.peerService = new PeerService();
 
     this._setupPeerEvents();
@@ -102,11 +104,8 @@ export class TerminalApp extends LitElement {
   }
 
   _handleCommand(text) {
-    // Dispatch to terminal-main for display
-    const main = this.shadowRoot.querySelector('terminal-main');
-    if (main) {
-      main.addCommandOutput(text);
-    }
+    // Add command to pending list - terminal-main will process it
+    this._pendingCommands = [...this._pendingCommands, { text, time: Date.now() }];
   }
 
   _onBootComplete() {
@@ -144,6 +143,7 @@ export class TerminalApp extends LitElement {
         class="screen ${this.screen === 'main' ? 'active' : ''}"
         .profile=${this.profile}
         .peerService=${this.peerService}
+        .pendingCommands=${this._pendingCommands}
       ></terminal-main>
 
       <terminal-locked

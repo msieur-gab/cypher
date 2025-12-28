@@ -269,10 +269,20 @@ export class TerminalMain extends LitElement {
     return this._cwd + '/' + path;
   }
 
+  _buildDataUrl(filePath) {
+    // On GitHub Pages, fetch raw files from raw.githubusercontent.com
+    if (window.location.hostname.endsWith('.github.io')) {
+      const [, owner, repo] = window.location.pathname.split('/');
+      return `https://raw.githubusercontent.com/${owner}/${repo}/main/data${filePath}`;
+    }
+    // Local development - fetch from same origin
+    const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');
+    return `${basePath}/data${filePath}`;
+  }
+
   async _fetchFile(filePath, filename) {
     try {
-      const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');
-      const url = `${basePath}/data${filePath}`;
+      const url = this._buildDataUrl(filePath);
 
       const response = await fetch(url);
       if (!response.ok) throw new Error('File not found');
@@ -301,8 +311,7 @@ export class TerminalMain extends LitElement {
 
   async _fetchAndSendFile(filePath, filename) {
     try {
-      const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');
-      const url = `${basePath}/data${filePath}`;
+      const url = this._buildDataUrl(filePath);
 
       const response = await fetch(url);
       if (!response.ok) throw new Error('File not found');

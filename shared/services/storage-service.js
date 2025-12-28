@@ -67,6 +67,19 @@ export class StorageService {
   async clearDownloads() {
     return await this.db.downloads.clear();
   }
+
+  // Session methods (using localStorage for simplicity)
+  getLastSession() {
+    return localStorage.getItem('cypher_last_session');
+  }
+
+  saveSession(sessionId) {
+    localStorage.setItem('cypher_last_session', sessionId);
+  }
+
+  clearSession() {
+    localStorage.removeItem('cypher_last_session');
+  }
 }
 
 // Singleton instance

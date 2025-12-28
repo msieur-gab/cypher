@@ -1,8 +1,9 @@
 /**
  * CYPHER Agent Scanner - QR code scanner for terminal pairing
+ * Uses manual camera access + jsQR (works in Shadow DOM)
  */
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
-import { Html5Qrcode } from 'https://esm.sh/html5-qrcode@2';
+import jsQR from 'https://esm.sh/jsqr@1';
 
 export class AgentScanner extends LitElement {
   static properties = {
@@ -65,14 +66,14 @@ export class AgentScanner extends LitElement {
       box-shadow: 0 0 30px rgba(0, 255, 204, 0.1);
     }
 
-    #scanner-region {
+    video {
       width: 100%;
       height: 100%;
+      object-fit: cover;
     }
 
-    /* Override html5-qrcode default styles */
-    #scanner-region video {
-      object-fit: cover !important;
+    canvas {
+      display: none;
     }
 
     .corner-marks {
@@ -217,7 +218,8 @@ export class AgentScanner extends LitElement {
     this._status = 'Initializing camera...';
     this._isScanning = false;
     this._error = null;
-    this._scanner = null;
+    this._stream = null;
+    this._animationId = null;
   }
 
   firstUpdated() {
@@ -234,47 +236,71 @@ export class AgentScanner extends LitElement {
       this._error = null;
       this._status = 'Starting camera...';
 
-      const scannerRegion = this.shadowRoot.getElementById('scanner-region');
-      this._scanner = new Html5Qrcode('scanner-region', {
-        formatsToSupport: [0], // QR_CODE only
-        verbose: false
+      // Request camera access - this triggers the permission prompt
+      this._stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: 640, height: 480 },
+        audio: false
       });
 
-      // Get rear camera
-      const config = {
-        fps: 10,
-        qrbox: { width: 200, height: 200 },
-        aspectRatio: 1.0,
+      const video = this.shadowRoot.getElementById('video');
+      video.srcObject = this._stream;
+
+      video.onloadedmetadata = () => {
+        video.play();
+        this._isScanning = true;
+        this._status = 'Scanning for Terminal QR...';
+        this._scanFrame();
       };
-
-      await this._scanner.start(
-        { facingMode: 'environment' },
-        config,
-        (decodedText) => this._onScanSuccess(decodedText),
-        (errorMessage) => {
-          // Ignore scan failures (expected when no QR in view)
-        }
-      );
-
-      this._isScanning = true;
-      this._status = 'Scanning for Terminal QR...';
     } catch (err) {
       console.error('Scanner error:', err);
-      this._error = err.message || 'Camera access denied';
+      this._error = err.name === 'NotAllowedError'
+        ? 'Camera access denied'
+        : (err.message || 'Camera error');
       this._status = 'Camera error';
       this._isScanning = false;
     }
   }
 
-  async _stopScanner() {
-    if (this._scanner) {
-      try {
-        await this._scanner.stop();
-        this._scanner.clear();
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      this._scanner = null;
+  _scanFrame() {
+    if (!this._stream || !this._isScanning) return;
+
+    const video = this.shadowRoot.getElementById('video');
+    const canvas = this.shadowRoot.getElementById('canvas');
+
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      this._animationId = requestAnimationFrame(() => this._scanFrame());
+      return;
+    }
+
+    // Draw video frame to canvas for QR analysis
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(video, 0, 0);
+
+    // Analyze frame for QR code
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: 'dontInvert'
+    });
+
+    if (code) {
+      this._onScanSuccess(code.data);
+      return;
+    }
+
+    // Continue scanning
+    this._animationId = requestAnimationFrame(() => this._scanFrame());
+  }
+
+  _stopScanner() {
+    if (this._animationId) {
+      cancelAnimationFrame(this._animationId);
+      this._animationId = null;
+    }
+    if (this._stream) {
+      this._stream.getTracks().forEach(track => track.stop());
+      this._stream = null;
     }
     this._isScanning = false;
   }
@@ -323,7 +349,8 @@ export class AgentScanner extends LitElement {
       ` : ''}
 
       <div class="scanner-container">
-        <div id="scanner-region"></div>
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
         ${this._isScanning ? html`
           <div class="corner-marks"></div>
           <div class="corner-marks-bottom"></div>

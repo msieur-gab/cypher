@@ -2,12 +2,22 @@
  * CYPHER Terminal Main Screen - Agent profile and command output
  */
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
+import { TERM_MSG } from '../../shared/utils/protocol.js';
 
 export class TerminalMain extends LitElement {
   static properties = {
     profile: { type: Object },
     peerService: { type: Object },
     _output: { type: Array, state: true },
+    _cwd: { type: String, state: true },
+  };
+
+  // Virtual file system structure
+  static FILE_SYSTEM = {
+    '/': ['intel', 'personnel', 'operations', 'README.md'],
+    '/intel': ['report-2847.md', 'intercept-445.md'],
+    '/personnel': ['asset-kondor.md'],
+    '/operations': ['nightfall-brief.md'],
   };
 
   static styles = css`
@@ -92,15 +102,42 @@ export class TerminalMain extends LitElement {
     .error { color: #ff4444; }
     .success { color: #00FFCC; }
     .dir { color: #ffaa00; }
+
+    .file-header {
+      color: #ff00ff;
+      margin-top: 0.5rem;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(255, 0, 255, 0.3);
+    }
+
+    .file-content {
+      color: #aaa;
+      white-space: pre-wrap;
+      padding: 0.5rem;
+      background: rgba(255, 255, 255, 0.02);
+      margin-bottom: 0.5rem;
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
   `;
 
   constructor() {
     super();
     this._output = [];
+    this._cwd = '/';
   }
 
   addCommandOutput(text) {
-    this._output = [...this._output, { type: 'command', text }];
+    // Parse and execute command
+    const result = this._executeCommand(text);
+
+    this._output = [...this._output, {
+      type: 'command',
+      command: text,
+      result: result.output,
+      isError: result.isError
+    }];
+
     this.requestUpdate();
 
     // Auto-scroll
@@ -108,6 +145,200 @@ export class TerminalMain extends LitElement {
       const output = this.shadowRoot.querySelector('.terminal-output');
       if (output) output.scrollTop = output.scrollHeight;
     });
+  }
+
+  _executeCommand(text) {
+    const parts = text.trim().split(/\s+/);
+    const cmd = parts[0]?.toLowerCase();
+    const args = parts.slice(1);
+
+    switch (cmd) {
+      case 'pwd':
+        return { output: this._cwd, isError: false };
+
+      case 'ls':
+        return this._cmdLs(args[0]);
+
+      case 'cd':
+        return this._cmdCd(args[0]);
+
+      case 'cat':
+        return this._cmdCat(args[0]);
+
+      case 'download':
+        return this._cmdDownload(args[0]);
+
+      case 'help':
+        return {
+          output: 'Available commands:\n  ls [dir]     - List directory\n  cd <dir>     - Change directory\n  cat <file>   - Read file\n  download <file> - Transfer to agent\n  pwd          - Current directory\n  help         - Show this help',
+          isError: false
+        };
+
+      default:
+        return { output: `Unknown command: ${cmd}. Type 'help' for commands.`, isError: true };
+    }
+  }
+
+  _cmdLs(path) {
+    const targetPath = this._resolvePath(path || '.');
+    const contents = TerminalMain.FILE_SYSTEM[targetPath];
+
+    if (!contents) {
+      return { output: `ls: cannot access '${path || '.'}': No such directory`, isError: true };
+    }
+
+    const listing = contents.map(item => {
+      const isDir = TerminalMain.FILE_SYSTEM[targetPath === '/' ? `/${item}` : `${targetPath}/${item}`];
+      return isDir ? `[DIR]  ${item}/` : `[FILE] ${item}`;
+    }).join('\n');
+
+    return { output: listing || '(empty)', isError: false };
+  }
+
+  _cmdCd(path) {
+    if (!path || path === '~') {
+      this._cwd = '/';
+      return { output: '', isError: false };
+    }
+
+    const targetPath = this._resolvePath(path);
+
+    if (TerminalMain.FILE_SYSTEM[targetPath]) {
+      this._cwd = targetPath;
+      return { output: '', isError: false };
+    }
+
+    return { output: `cd: no such directory: ${path}`, isError: true };
+  }
+
+  _cmdCat(filename) {
+    if (!filename) {
+      return { output: 'cat: missing file operand', isError: true };
+    }
+
+    const filePath = this._resolvePath(filename);
+
+    // Check if it's a file (not a directory)
+    if (TerminalMain.FILE_SYSTEM[filePath]) {
+      return { output: `cat: ${filename}: Is a directory`, isError: true };
+    }
+
+    // Fetch the actual file content
+    this._fetchFile(filePath, filename);
+    return { output: `Reading ${filename}...`, isError: false };
+  }
+
+  _cmdDownload(filename) {
+    if (!filename) {
+      return { output: 'download: missing file operand', isError: true };
+    }
+
+    const filePath = this._resolvePath(filename);
+
+    // Fetch and send to agent
+    this._fetchAndSendFile(filePath, filename);
+    return { output: `Initiating transfer: ${filename}...`, isError: false };
+  }
+
+  _resolvePath(path) {
+    if (!path || path === '.') return this._cwd;
+    if (path === '..') {
+      if (this._cwd === '/') return '/';
+      const parts = this._cwd.split('/').filter(p => p);
+      parts.pop();
+      return '/' + parts.join('/') || '/';
+    }
+    if (path.startsWith('/')) return path;
+
+    // Relative path
+    if (this._cwd === '/') return '/' + path;
+    return this._cwd + '/' + path;
+  }
+
+  async _fetchFile(filePath, filename) {
+    try {
+      const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');
+      const url = `${basePath}/data${filePath}`;
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('File not found');
+
+      const content = await response.text();
+
+      this._output = [...this._output, {
+        type: 'file-content',
+        filename,
+        content
+      }];
+      this.requestUpdate();
+
+      this.updateComplete.then(() => {
+        const output = this.shadowRoot.querySelector('.terminal-output');
+        if (output) output.scrollTop = output.scrollHeight;
+      });
+    } catch (err) {
+      this._output = [...this._output, {
+        type: 'error',
+        content: `cat: ${filename}: No such file`
+      }];
+      this.requestUpdate();
+    }
+  }
+
+  async _fetchAndSendFile(filePath, filename) {
+    try {
+      const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');
+      const url = `${basePath}/data${filePath}`;
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('File not found');
+
+      const content = await response.text();
+
+      // Send to agent
+      if (this.peerService) {
+        this.peerService.send({
+          type: TERM_MSG.FILE_CONTENT,
+          filename,
+          path: filePath,
+          content
+        });
+      }
+
+      this._output = [...this._output, {
+        type: 'download-success',
+        content: `Transfer complete: ${filename}`
+      }];
+      this.requestUpdate();
+    } catch (err) {
+      this._output = [...this._output, {
+        type: 'error',
+        content: `download: ${filename}: Transfer failed`
+      }];
+      this.requestUpdate();
+    }
+  }
+
+  _renderOutput(item) {
+    if (item.type === 'command') {
+      return html`
+        <div class="prompt">${this._cwd}> ${item.command}</div>
+        ${item.result ? html`<div class="${item.isError ? 'error' : 'output'}">${item.result}</div>` : ''}
+      `;
+    }
+    if (item.type === 'file-content') {
+      return html`
+        <div class="file-header">── ${item.filename} ──</div>
+        <div class="file-content">${item.content}</div>
+      `;
+    }
+    if (item.type === 'download-success') {
+      return html`<div class="success">${item.content}</div>`;
+    }
+    if (item.type === 'error') {
+      return html`<div class="error">${item.content}</div>`;
+    }
+    return html`<div class="output">${JSON.stringify(item)}</div>`;
   }
 
   render() {
@@ -124,10 +355,8 @@ export class TerminalMain extends LitElement {
       </div>
 
       <div class="terminal-output">
-        ${this._output.map(item => html`
-          <div class="prompt">[AGENT]</div>
-          <div class="output">${item.text}</div>
-        `)}
+        <div class="output">Type 'help' for available commands.</div>
+        ${this._output.map(item => this._renderOutput(item))}
       </div>
     `;
   }

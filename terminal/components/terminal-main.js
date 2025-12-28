@@ -282,10 +282,13 @@ export class TerminalMain extends LitElement {
   _buildDataUrl(filePath) {
     // On GitHub Pages, fetch raw files from raw.githubusercontent.com
     // URL format: msieur-gab.github.io/cypher/...
+    // TODO: Change branch to 'main' after merging feature branch
+    const BRANCH = 'feature/terminal-filesystem';
+
     if (window.location.hostname.endsWith('.github.io')) {
       const owner = window.location.hostname.split('.')[0]; // msieur-gab
       const repo = window.location.pathname.split('/')[1];   // cypher
-      return `https://raw.githubusercontent.com/${owner}/${repo}/main/data${filePath}`;
+      return `https://raw.githubusercontent.com/${owner}/${repo}/${BRANCH}/data${filePath}`;
     }
     // Local development - fetch from same origin
     const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');

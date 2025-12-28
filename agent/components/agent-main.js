@@ -4,6 +4,7 @@
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 import { MSG, TERM_MSG } from '../../shared/utils/protocol.js';
 import { storageService } from '../../shared/services/storage-service.js';
+import '../../shared/components/cypher-markdown.js';
 
 export class AgentMain extends LitElement {
   static properties = {
@@ -14,6 +15,8 @@ export class AgentMain extends LitElement {
     _isConnected: { type: Boolean, state: true },
     _messages: { type: Array, state: true },
     _command: { type: String, state: true },
+    _downloads: { type: Array, state: true },
+    _viewingFile: { type: Object, state: true },
   };
 
   static styles = css`
@@ -120,6 +123,67 @@ export class AgentMain extends LitElement {
     .msg-download { color: #ff00ff; }
 
     .disconnect-row { margin-top: 2rem; }
+
+    /* Downloads section */
+    .intel-section {
+      margin: 1rem auto;
+      max-width: 400px;
+      text-align: left;
+    }
+    .intel-header {
+      color: #ff00ff;
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.1em;
+    }
+    .intel-list {
+      border: 1px solid rgba(255, 0, 255, 0.3);
+      background: #000;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .intel-item {
+      padding: 0.5rem;
+      border-bottom: 1px solid #222;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: #888;
+    }
+    .intel-item:hover {
+      background: rgba(255, 0, 255, 0.1);
+      color: #ff00ff;
+    }
+    .intel-empty {
+      padding: 0.5rem;
+      color: #444;
+      font-size: 0.8rem;
+      text-align: center;
+    }
+
+    /* File viewer overlay */
+    .file-viewer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 100;
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    .file-viewer-close {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: #ff4444;
+      color: #000;
+      border: none;
+      padding: 0.5rem 1rem;
+      font-family: monospace;
+      cursor: pointer;
+      z-index: 101;
+    }
   `;
 
   constructor() {
@@ -129,6 +193,8 @@ export class AgentMain extends LitElement {
     this._messages = [];
     this._command = '';
     this._hasConnected = false;
+    this._downloads = [];
+    this._viewingFile = null;
   }
 
   updated(changedProps) {
@@ -136,6 +202,7 @@ export class AgentMain extends LitElement {
     if (!this._hasConnected && this.peerService && this.sessionId && this.profile) {
       this._hasConnected = true;
       this._connect();
+      this._loadDownloads();
     }
   }
 
@@ -188,6 +255,7 @@ export class AgentMain extends LitElement {
         content: data.content
       });
       this._addMessage(`Downloaded: ${data.filename}`, 'download');
+      await this._loadDownloads();
     } else if (data.type === TERM_MSG.CMD_OUTPUT) {
       this._addMessage(data.output, 'received');
     } else if (data.type === TERM_MSG.CMD_ERROR) {
@@ -240,6 +308,18 @@ export class AgentMain extends LitElement {
     this.dispatchEvent(new CustomEvent('disconnect'));
   }
 
+  async _loadDownloads() {
+    this._downloads = await storageService.getDownloads();
+  }
+
+  _viewFile(file) {
+    this._viewingFile = file;
+  }
+
+  _closeFile() {
+    this._viewingFile = null;
+  }
+
   render() {
     if (!this.profile) return html``;
 
@@ -273,11 +353,35 @@ export class AgentMain extends LitElement {
         `)}
       </div>
 
+      <div class="intel-section">
+        <div class="intel-header">ACQUIRED INTEL (${this._downloads.length})</div>
+        <div class="intel-list">
+          ${this._downloads.length === 0
+            ? html`<div class="intel-empty">No files downloaded</div>`
+            : this._downloads.map(f => html`
+                <div class="intel-item" @click=${() => this._viewFile(f)}>
+                  ${f.filename}
+                </div>
+              `)
+          }
+        </div>
+      </div>
+
       <div class="disconnect-row">
         <button class="danger" @click=${this._disconnect} ?disabled=${!this._isConnected}>
           DISCONNECT
         </button>
       </div>
+
+      ${this._viewingFile ? html`
+        <div class="file-viewer">
+          <button class="file-viewer-close" @click=${this._closeFile}>CLOSE</button>
+          <cypher-markdown
+            .filename=${this._viewingFile.filename}
+            .content=${this._viewingFile.content}
+          ></cypher-markdown>
+        </div>
+      ` : ''}
     `;
   }
 }

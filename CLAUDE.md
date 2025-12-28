@@ -34,30 +34,64 @@ npx serve .
 
 ## Architecture
 
+### Folder Structure
+```
+cypher/
+├── shared/
+│   ├── components/
+│   │   └── cypher-markdown.js   # Styled markdown renderer
+│   ├── services/
+│   │   ├── peer-service.js      # PeerJS connection wrapper
+│   │   └── storage-service.js   # Dexie.js wrapper
+│   └── utils/
+│       └── protocol.js          # Message type constants
+├── terminal/
+│   ├── index.html               # Entry point
+│   └── components/
+│       ├── terminal-app.js      # Main shell
+│       ├── terminal-connect.js  # QR code screen
+│       ├── terminal-boot.js     # Boot animation
+│       ├── terminal-main.js     # Connected view + file system
+│       └── terminal-locked.js   # Locked screen
+├── agent/
+│   ├── index.html               # Entry point
+│   └── components/
+│       ├── agent-app.js         # Main shell
+│       ├── agent-setup.js       # Profile/avatar creation
+│       └── agent-main.js        # Connected view + intel viewer
+└── data/                        # Game content (markdown files)
+    ├── intel/
+    ├── personnel/
+    └── operations/
+```
+
 ### No Build Step Required
 All dependencies load via CDN (esm.sh). Pure ES Modules served directly.
 
 **Dependencies:**
-- Lit (UI framework): `https://esm.sh/lit`
+- Lit (UI framework): `https://esm.sh/lit@3`
 - PeerJS (WebRTC): `https://esm.sh/peerjs@1`
 - QRCode: `https://esm.sh/qrcode@1`
-- Dexie.js (IndexedDB): `https://esm.sh/dexie`
+- Dexie.js (IndexedDB): `https://esm.sh/dexie@4`
 
-### Data Flow
-```
-IPFS → Mobile (fetch, decrypt, store) → PC (render)
-```
+### File System Commands
+Agent can send terminal commands:
+- `ls [dir]` - List directory
+- `cd <dir>` - Change directory
+- `cat <file>` - Display file on terminal
+- `download <file>` - Transfer to agent device
+- `pwd` - Show current directory
+- `help` - Show commands
 
 ### Connection Protocol
-1. PC generates QR code with WebRTC offer + session ID
+1. PC generates QR code with session ID
 2. Mobile scans QR and connects via PeerJS
-3. Mobile sends `INIT_STATE` with game progress
-4. Bidirectional messaging:
-   - Mobile → PC: `INIT_STATE`, `STATE_UPDATE`, `CONTENT_RESPONSE`, `NOTIFICATION`
-   - PC → Mobile: `UI_EVENT`, `REQUEST_CONTENT`, `REMOTE_INPUT`
+3. Mobile sends `INIT_STATE` with profile
+4. Terminal runs boot sequence animation
+5. Bidirectional messaging for commands/files
 
 ### Database Schema (Mobile Only - Dexie.js)
-Tables: `agent`, `progress`, `evidence`, `decryptedContent`, `contacts`, `keychain`, `missions`, `settings`
+Tables: `agent` (profile), `downloads` (acquired intel)
 
 ## Key Documentation
 
@@ -66,7 +100,22 @@ Tables: `agent`, `progress`, `evidence`, `decryptedContent`, `contacts`, `keycha
 
 ## Current Status
 
-Early POC phase. Implemented: PeerJS connection, QR generation, basic message passing. Planned: Lit components, Dexie database, IPFS integration, AES-GCM encryption, game content.
+**Implemented:**
+- Lit web components architecture (shared, terminal, agent)
+- PeerJS connection with heartbeat
+- QR code generation for pairing
+- Boot sequence animation
+- Virtual file system with real markdown files
+- Terminal commands: ls, cd, cat, download, pwd, help
+- Markdown renderer with cyberpunk styling
+- Agent intel viewer (downloaded files)
+- Dexie.js storage for profile and downloads
+
+**Planned:**
+- IPFS integration for decentralized content
+- AES-GCM encryption
+- More game content
+- Session reconnection handling
 
 ## Design Principles
 

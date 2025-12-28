@@ -70,6 +70,8 @@ export class AgentScanner extends LitElement {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      /* Cyberpunk green tint effect */
+      filter: saturate(0) brightness(0.8) sepia(1) hue-rotate(120deg) saturate(2);
     }
 
     canvas {

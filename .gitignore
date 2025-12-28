@@ -1,0 +1,14 @@
+# SSL certificates (local testing only)
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

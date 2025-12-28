@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYPHER Agent</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: monospace;
+      background: #0a0a0a;
+      color: #00FFCC;
+      padding: 1rem;
+      text-align: center;
+      margin: 0;
+      min-height: 100vh;
+    }
+    h1 { color: #00FFCC; margin: 0.5rem 0; letter-spacing: 0.2em; }
+    h2 { color: #00FFCC; margin: 0.5rem 0; font-size: 0.9rem; opacity: 0.8; }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* Setup screen */
+    #setup { padding: 1rem; }
+
+    #avatar-container {
+      width: 250px;
+      height: 250px;
+      margin: 1rem auto;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 4px solid rgba(0, 255, 204, 0.3);
+      background: #000;
+      position: relative;
+      box-shadow: 0 0 50px rgba(0, 255, 204, 0.1);
+    }
+
+    #camera-preview { display: none; }
+
+    #avatar-canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #countdown-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+    #countdown-overlay.active { display: flex; }
+    #countdown-number {
+      font-size: 6rem;
+      font-weight: bold;
+      animation: ping 1s infinite;
+    }
+    @keyframes ping {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+
+    #flash-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: white;
+      z-index: 50;
+    }
+    #flash-overlay.active {
+      display: block;
+      animation: flash 0.3s ease-out forwards;
+    }
+    @keyframes flash {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    #frozen-border {
+      display: none;
+      position: absolute;
+      inset: 0;
+      border: 20px solid rgba(0, 255, 204, 0.2);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: pulse 2s infinite;
+    }
+    #frozen-border.active { display: block; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    input[type="text"] {
+      background: #111;
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      color: #00FFCC;
+      padding: 0.75rem;
+      font-family: monospace;
+      font-size: 1rem;
+      width: 100%;
+      max-width: 250px;
+      text-align: center;
+      text-transform: uppercase;
+    }
+    input[type="text"]::placeholder { text-transform: none; color: rgba(0, 255, 204, 0.4); }
+    input[type="text"]:focus { outline: none; border-color: #00FFCC; box-shadow: 0 0 10px rgba(0, 255, 204, 0.2); }
+
+    button {
+      background: transparent;
+      color: #00FFCC;
+      border: 2px solid #00FFCC;
+      padding: 0.75rem 1.5rem;
+      font-family: monospace;
+      font-size: 1rem;
+      cursor: pointer;
+      margin: 0.5rem;
+      border-radius: 50px;
+      transition: all 0.2s;
+    }
+    button:hover { background: rgba(0, 255, 204, 0.1); }
+    button:disabled { border-color: #333; color: #333; cursor: not-allowed; }
+    button.primary { background: #00FFCC; color: #000; }
+    button.primary:hover { background: #00CCAA; }
+    button.secondary { border-color: #666; color: #666; }
+    button.secondary:hover { border-color: #999; color: #999; }
+    button.danger { border-color: #ff4444; color: #ff4444; }
+    button.danger:hover { background: rgba(255, 68, 68, 0.1); }
+    button.danger:disabled { border-color: #662222; color: #662222; }
+
+    .instructions { color: rgba(0, 255, 204, 0.6); font-size: 0.75rem; margin: 0.5rem 0; letter-spacing: 0.1em; }
+
+    .level-badge {
+      display: inline-block;
+      background: #00FFCC;
+      color: #000;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-weight: bold;
+      margin: 0.5rem 0;
+      font-size: 0.8rem;
+    }
+
+    .config-display {
+      font-size: 0.7rem;
+      opacity: 0.5;
+      margin-top: 0.5rem;
+    }
+
+    /* Connected screen */
+    #status { padding: 1rem; margin: 1rem; border: 1px solid rgba(0, 255, 204, 0.3); }
+    #messages {
+      text-align: left;
+      max-width: 400px;
+      margin: 1rem auto;
+      padding: 1rem;
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      min-height: 100px;
+      font-size: 0.85rem;
+    }
+    .connected { color: #00FFCC; }
+    .error { color: #ff4444; }
+
+    /* Profile display */
+    #profile-display {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin: 1rem auto;
+      padding: 1rem;
+      border: 2px solid rgba(0, 255, 204, 0.3);
+      border-radius: 8px;
+      max-width: 300px;
+      background: linear-gradient(135deg, #0a0a0a 0%, #111 100%);
+    }
+    #profile-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 3px solid #00FFCC;
+      background: #000;
+    }
+    #profile-info { text-align: left; }
+    #profile-codename { color: #00FFCC; font-weight: bold; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+
+  <!-- Setup Screen -->
+  <div id="setup" class="screen">
+    <h1>CYPHER</h1>
+    <h2>IDENTITY_GEN</h2>
+
+    <div id="avatar-container">
+      <video id="camera-preview" autoplay playsinline muted></video>
+      <canvas id="avatar-canvas"></canvas>
+      <div id="countdown-overlay"><span id="countdown-number">3</span></div>
+      <div id="flash-overlay"></div>
+      <div id="frozen-border"></div>
+    </div>
+
+    <div class="config-display">RES: 100 // MODE: HORIZONTAL</div>
+
+    <div style="margin-top: 1rem;">
+      <button id="captureBtn">CAPTURE</button>
+      <button id="retakeBtn" class="secondary" style="display:none;">RETAKE</button>
+    </div>
+
+    <div style="margin-top: 1.5rem;">
+      <input type="text" id="codenameInput" placeholder="Enter codename" maxlength="16">
+    </div>
+
+    <div class="level-badge">ACCREDITATION LEVEL 1</div>
+
+    <div style="margin-top: 1rem;">
+      <button id="registerBtn" class="primary" disabled>REGISTER AGENT</button>
+    </div>
+  </div>
+
+  <!-- Connected Screen -->
+  <div id="main" class="screen">
+    <h1>CYPHER</h1>
+
+    <div id="profile-display">
+      <img id="profile-avatar" alt="Avatar">
+      <div id="profile-info">
+        <div id="profile-codename">...</div>
+        <div class="level-badge">LEVEL <span id="profile-level">1</span></div>
+      </div>
+    </div>
+
+    <div id="session">Session: <span id="sessionId">...</span></div>
+    <div id="status">Connecting...</div>
+
+    <div id="command-input" style="margin: 1rem 0;">
+      <input type="text" id="messageInput" placeholder="Enter command..." style="width: 70%; max-width: 200px;">
+      <button id="sendBtn" disabled>SEND</button>
+    </div>
+
+    <div id="messages"><strong>Messages:</strong><br></div>
+
+    <div style="margin-top: 2rem;">
+      <button id="disconnectBtn" class="danger" disabled>DISCONNECT</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Peer } from 'https://esm.sh/peerjs@1';
+    import Dexie from 'https://esm.sh/dexie@4';
+
+    // Database setup
+    const db = new Dexie('CypherAgent');
+    db.version(1).stores({
+      agent: 'id, codename, level, avatar'
+    });
+
+    // Cyber avatar config
+    const CHAR_SETS = {
+      horizontal: "  ▂▃▄▅▆▇█",
+      vertical: " ▏▎▍▌▋▊▉█",
+      retro: " ░▒▓█"
+    };
+    const config = {
+      resolution: 100,
+      mode: 'horizontal',
+      color: '#00FFCC'
+    };
+
+    // State
+    let avatarDataUrl = null;
+    let stream = null;
+    let animationId = null;
+    let isFrozen = false;
+
+    // DOM elements
+    const setupScreen = document.getElementById('setup');
+    const mainScreen = document.getElementById('main');
+    const cameraPreview = document.getElementById('camera-preview');
+    const avatarCanvas = document.getElementById('avatar-canvas');
+    const countdownOverlay = document.getElementById('countdown-overlay');
+    const countdownNumber = document.getElementById('countdown-number');
+    const flashOverlay = document.getElementById('flash-overlay');
+    const frozenBorder = document.getElementById('frozen-border');
+    const captureBtn = document.getElementById('captureBtn');
+    const retakeBtn = document.getElementById('retakeBtn');
+    const codenameInput = document.getElementById('codenameInput');
+    const registerBtn = document.getElementById('registerBtn');
+
+    // Check for existing profile
+    async function checkProfile() {
+      const profile = await db.agent.get('player');
+      return profile || null;
+    }
+
+    // Start camera
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720, facingMode: 'user' },
+          audio: false
+        });
+        cameraPreview.srcObject = stream;
+        cameraPreview.onloadedmetadata = () => {
+          cameraPreview.play();
+          renderFrame();
+        };
+      } catch (err) {
+        console.error('Camera error:', err);
+        alert('Could not access camera. Please allow camera permissions.');
+      }
+    }
+
+    // Render cyber avatar frame
+    function renderFrame() {
+      if (!stream || isFrozen) return;
+
+      const video = cameraPreview;
+      const canvas = avatarCanvas;
+
+      if (video.readyState !== 4) {
+        animationId = requestAnimationFrame(renderFrame);
+        return;
+      }
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      // Force canvas to match display size (Square)
+      const size = canvas.clientWidth * 2; // Higher res for quality
+      canvas.width = size;
+      canvas.height = size;
+
+      // Crop logic - square from center
+      const vidW = video.videoWidth;
+      const vidH = video.videoHeight;
+      const cropSize = Math.min(vidW, vidH);
+      const cropX = (vidW - cropSize) / 2;
+      const cropY = (vidH - cropSize) / 2;
+
+      // Grid calculation
+      const cols = config.resolution;
+      const rows = Math.floor(cols * 0.6);
+
+      const cellWidth = size / cols;
+      const cellHeight = size / rows;
+
+      // Downsample to temp canvas
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = cols;
+      tempCanvas.height = rows;
+      const tempCtx = tempCanvas.getContext('2d');
+
+      // Mirror horizontally for selfie
+      tempCtx.translate(cols, 0);
+      tempCtx.scale(-1, 1);
+
+      // Draw cropped square
+      tempCtx.drawImage(video, cropX, cropY, cropSize, cropSize, 0, 0, cols, rows);
+
+      const pixels = tempCtx.getImageData(0, 0, cols, rows).data;
+
+      // Render
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.font = `${cellWidth}px monospace`;
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = config.color;
+
+      const chars = CHAR_SETS[config.mode];
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = (y * cols + x) * 4;
+          const brightness = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+          const charIndex = Math.floor((brightness / 255) * (chars.length - 1));
+          const char = chars[charIndex];
+          ctx.fillText(char, x * cellWidth, y * cellHeight);
+        }
+      }
+
+      if (!isFrozen) {
+        animationId = requestAnimationFrame(renderFrame);
+      }
+    }
+
+    // Capture with countdown
+    function startCapture() {
+      let count = 3;
+      countdownNumber.textContent = count;
+      countdownOverlay.classList.add('active');
+
+      const timer = setInterval(() => {
+        count--;
+        if (count > 0) {
+          countdownNumber.textContent = count;
+        } else {
+          clearInterval(timer);
+          countdownOverlay.classList.remove('active');
+          performCapture();
+        }
+      }, 1000);
+    }
+
+    function performCapture() {
+      // Flash effect
+      flashOverlay.classList.add('active');
+      setTimeout(() => flashOverlay.classList.remove('active'), 300);
+
+      // Freeze
+      isFrozen = true;
+      frozenBorder.classList.add('active');
+      cancelAnimationFrame(animationId);
+
+      // Save current canvas as avatar
+      avatarDataUrl = avatarCanvas.toDataURL('image/png');
+
+      // Update buttons
+      captureBtn.style.display = 'none';
+      retakeBtn.style.display = 'inline-block';
+      updateRegisterButton();
+    }
+
+    function retakeAvatar() {
+      isFrozen = false;
+      avatarDataUrl = null;
+      frozenBorder.classList.remove('active');
+      captureBtn.style.display = 'inline-block';
+      retakeBtn.style.display = 'none';
+      renderFrame();
+      updateRegisterButton();
+    }
+
+    function updateRegisterButton() {
+      registerBtn.disabled = !(avatarDataUrl && codenameInput.value.trim().length >= 2);
+    }
+
+    // Save profile
+    async function registerAgent() {
+      const codename = codenameInput.value.trim().toUpperCase();
+
+      await db.agent.put({
+        id: 'player',
+        codename: codename,
+        level: 1,
+        avatar: avatarDataUrl
+      });
+
+      // Stop camera
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+
+      startMain({ codename, level: 1, avatar: avatarDataUrl });
+    }
+
+    // Main app
+    async function startMain(profile) {
+      setupScreen.classList.remove('active');
+      mainScreen.classList.add('active');
+
+      // Display profile
+      document.getElementById('profile-codename').textContent = profile.codename;
+      document.getElementById('profile-level').textContent = profile.level;
+
+      if (profile.avatar) {
+        document.getElementById('profile-avatar').src = profile.avatar;
+      }
+
+      // Get session from URL
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('session');
+
+      if (!sessionId) {
+        document.getElementById('status').textContent = 'No session ID. Scan QR from Terminal.';
+        document.getElementById('status').className = 'error';
+        return;
+      }
+
+      document.getElementById('sessionId').textContent = sessionId;
+      document.getElementById('status').textContent = 'Connecting...';
+
+      // Create peer and connect
+      const peer = new Peer();
+      let connection = null;
+
+      peer.on('open', id => {
+        console.log('Agent peer ID:', id);
+
+        connection = peer.connect(`cypher-${sessionId}`, { reliable: true });
+
+        connection.on('open', () => {
+          document.getElementById('status').textContent = 'Connected to Terminal!';
+          document.getElementById('status').className = 'connected';
+          document.getElementById('sendBtn').disabled = false;
+          document.getElementById('disconnectBtn').disabled = false;
+
+          // Send profile to terminal
+          connection.send({
+            type: 'INIT_STATE',
+            profile: {
+              codename: profile.codename,
+              level: profile.level,
+              avatar: profile.avatar
+            }
+          });
+        });
+
+        connection.on('data', data => {
+          console.log('Received:', data);
+
+          // Respond to heartbeat
+          if (data.type === 'HEARTBEAT') {
+            connection.send({ type: 'PONG' });
+            return;
+          }
+
+          document.getElementById('messages').innerHTML += `← ${JSON.stringify(data)}<br>`;
+        });
+
+        connection.on('close', () => {
+          document.getElementById('status').textContent = 'Disconnected';
+          document.getElementById('sendBtn').disabled = true;
+          document.getElementById('disconnectBtn').disabled = true;
+        });
+
+        connection.on('error', err => {
+          document.getElementById('status').textContent = 'Connection error';
+          document.getElementById('status').className = 'error';
+        });
+      });
+
+      peer.on('error', err => {
+        console.error('Peer error:', err);
+        document.getElementById('status').textContent = 'Error: ' + err.type;
+        document.getElementById('status').className = 'error';
+      });
+
+      // Send message
+      function sendMessage() {
+        const input = document.getElementById('messageInput');
+        const text = input.value.trim();
+        if (!text || !connection || !connection.open) return;
+
+        const msg = { type: 'COMMAND', text: text, time: Date.now() };
+        connection.send(msg);
+        document.getElementById('messages').innerHTML += `→ ${text}<br>`;
+        input.value = '';
+      }
+
+      document.getElementById('sendBtn').addEventListener('click', sendMessage);
+      document.getElementById('messageInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') sendMessage();
+      });
+
+      // Disconnect handler
+      document.getElementById('disconnectBtn').addEventListener('click', () => {
+        if (connection) {
+          connection.close();
+        }
+        peer.destroy();
+        document.getElementById('status').textContent = 'Disconnected by agent';
+        document.getElementById('status').className = 'error';
+        document.getElementById('messages').innerHTML += `<span style="color:#ff4444">// CONNECTION TERMINATED //</span><br>`;
+      });
+    }
+
+    // Event listeners
+    captureBtn.addEventListener('click', startCapture);
+    retakeBtn.addEventListener('click', retakeAvatar);
+    codenameInput.addEventListener('input', updateRegisterButton);
+    registerBtn.addEventListener('click', registerAgent);
+
+    // Init
+    async function init() {
+      const profile = await checkProfile();
+
+      if (profile) {
+        startMain(profile);
+      } else {
+        setupScreen.classList.add('active');
+        startCamera();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

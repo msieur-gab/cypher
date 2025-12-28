@@ -278,10 +278,22 @@ export class AgentScanner extends LitElement {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(video, 0, 0);
 
-    // Analyze frame for QR code
-    // Terminal QR uses inverted colors (cyan on black), so we need to attempt inversion
+    // Get image data and convert to grayscale for better QR detection
+    // This helps jsQR handle colored QR codes (like our cyan on black)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      // Convert to grayscale using luminance formula
+      const gray = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+      data[i] = gray;     // R
+      data[i + 1] = gray; // G
+      data[i + 2] = gray; // B
+      // Alpha stays the same
+    }
+
+    // Analyze frame for QR code
+    const code = jsQR(data, imageData.width, imageData.height, {
       inversionAttempts: 'attemptBoth'
     });
 

@@ -279,9 +279,10 @@ export class AgentScanner extends LitElement {
     ctx.drawImage(video, 0, 0);
 
     // Analyze frame for QR code
+    // Terminal QR uses inverted colors (cyan on black), so we need to attempt inversion
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: 'dontInvert'
+      inversionAttempts: 'attemptBoth'
     });
 
     if (code) {

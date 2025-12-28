@@ -32,14 +32,6 @@ export class AgentApp extends LitElement {
       letter-spacing: 0.2em;
       text-align: center;
     }
-
-    .screen {
-      display: none;
-    }
-
-    .screen.active {
-      display: block;
-    }
   `;
 
   constructor() {
@@ -93,18 +85,20 @@ export class AgentApp extends LitElement {
     return html`
       <h1>CYPHER</h1>
 
-      <agent-setup
-        class="screen ${this.screen === 'setup' ? 'active' : ''}"
-        @profile-created=${this._onProfileCreated}
-      ></agent-setup>
+      ${this.screen === 'setup' ? html`
+        <agent-setup
+          @profile-created=${this._onProfileCreated}
+        ></agent-setup>
+      ` : ''}
 
-      <agent-main
-        class="screen ${this.screen === 'main' ? 'active' : ''}"
-        .profile=${this.profile}
-        .sessionId=${this.sessionId}
-        .peerService=${this.peerService}
-        @disconnect=${this._onDisconnect}
-      ></agent-main>
+      ${this.screen === 'main' ? html`
+        <agent-main
+          .profile=${this.profile}
+          .sessionId=${this.sessionId}
+          .peerService=${this.peerService}
+          @disconnect=${this._onDisconnect}
+        ></agent-main>
+      ` : ''}
     `;
   }
 }

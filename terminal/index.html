@@ -337,7 +337,10 @@
     // Auto-detect host and generate QR
     const qrContainer = document.getElementById('qr');
     const agentUrlDisplay = document.getElementById('agent-url');
-    const agentUrl = `${window.location.origin}/agent/?session=${sessionId}`;
+
+    // Get base path (works on GitHub Pages and localhost)
+    const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');
+    const agentUrl = `${window.location.origin}${basePath}/agent/?session=${sessionId}`;
 
     agentUrlDisplay.textContent = agentUrl;
 

@@ -17,11 +17,7 @@
     #status { padding: 1rem; margin: 1rem; border: 1px solid rgba(0, 255, 204, 0.3); }
     .connected { color: #00FFCC; }
     .waiting { color: #ffaa00; }
-    #host-config { margin: 1rem; }
-    #host-config input { background: #111; border: 1px solid rgba(0, 255, 204, 0.3); color: #00FFCC; padding: 0.5rem; font-family: monospace; width: 200px; }
-    #host-config button { background: #00FFCC; border: none; color: #000; padding: 0.5rem 1rem; cursor: pointer; font-family: monospace; border-radius: 4px; }
-    #host-config button:hover { background: #00CCAA; }
-    #agent-url { font-size: 0.8rem; color: rgba(0, 255, 204, 0.5); word-break: break-all; max-width: 400px; margin: 0.5rem auto; }
+        #agent-url { font-size: 0.8rem; color: rgba(0, 255, 204, 0.5); word-break: break-all; max-width: 400px; margin: 0.5rem auto; }
 
     /* Boot screen - full terminal */
     #boot-screen {
@@ -275,10 +271,6 @@
     <h1>CYPHER Terminal</h1>
     <p>Scan QR with phone to connect</p>
 
-    <div id="host-config">
-      <input type="text" id="hostInput" placeholder="192.168.x.x:8000">
-      <button id="updateQR">Update QR</button>
-    </div>
     <div id="qr"></div>
     <div id="agent-url"></div>
     <div id="session">Session: <span id="sessionId">...</span></div>
@@ -342,30 +334,17 @@
     const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
     document.getElementById('sessionId').textContent = sessionId;
 
-    // Host configuration
-    const hostInput = document.getElementById('hostInput');
+    // Auto-detect host and generate QR
     const qrContainer = document.getElementById('qr');
     const agentUrlDisplay = document.getElementById('agent-url');
+    const agentUrl = `${window.location.origin}/agent/?session=${sessionId}`;
 
-    hostInput.value = window.location.host;
+    agentUrlDisplay.textContent = agentUrl;
 
-    function generateQR() {
-      const host = hostInput.value || window.location.host;
-      const protocol = window.location.protocol;
-      const agentUrl = `${protocol}//${host}/agent/?session=${sessionId}`;
-
-      qrContainer.innerHTML = '';
-      agentUrlDisplay.textContent = agentUrl;
-
-      QRCode.toCanvas(document.createElement('canvas'), agentUrl, {
-        width: 200,
-        color: { dark: '#00FFCC', light: '#000000' }
-      }).then(canvas => qrContainer.appendChild(canvas));
-    }
-
-    generateQR();
-    document.getElementById('updateQR').addEventListener('click', generateQR);
-    hostInput.addEventListener('keypress', e => { if (e.key === 'Enter') generateQR(); });
+    QRCode.toCanvas(document.createElement('canvas'), agentUrl, {
+      width: 200,
+      color: { dark: '#00FFCC', light: '#000000' }
+    }).then(canvas => qrContainer.appendChild(canvas));
 
     // Typing effect
     async function typeText(element, text, speed = 30) {

@@ -32,9 +32,18 @@ export class PeerService extends EventTarget {
       this._setupConnection(conn, true);
     });
 
+    this.peer.on('disconnected', () => {
+      console.log('[PeerService] Signaling server disconnected, attempting reconnect...');
+      // Try to reconnect to signaling server (doesn't affect existing P2P connections)
+      this.peer.reconnect();
+    });
+
     this.peer.on('error', err => {
       console.error('[PeerService] Peer error:', err);
-      this._emit('error', { error: err });
+      // Don't emit error for server disconnect if we have an active connection
+      if (err.type !== 'server-error' || !this.connection?.open) {
+        this._emit('error', { error: err });
+      }
     });
   }
 
@@ -53,9 +62,16 @@ export class PeerService extends EventTarget {
       this._setupConnection(this.connection, false);
     });
 
+    this.peer.on('disconnected', () => {
+      console.log('[PeerService] Signaling server disconnected, attempting reconnect...');
+      this.peer.reconnect();
+    });
+
     this.peer.on('error', err => {
       console.error('[PeerService] Peer error:', err);
-      this._emit('error', { error: err });
+      if (err.type !== 'server-error' || !this.connection?.open) {
+        this._emit('error', { error: err });
+      }
     });
   }
 

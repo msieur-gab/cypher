@@ -1,11 +1,17 @@
 /**
  * CYPHER Agent App - Main application shell
+ *
+ * Screens:
+ * - setup: Profile creation (if no profile)
+ * - scanner: QR code scanner (if has profile but no session)
+ * - main: Connected view (if has profile and session)
  */
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 import { storageService } from '../../shared/services/storage-service.js';
 import { PeerService } from '../../shared/services/peer-service.js';
 import { MSG } from '../../shared/utils/protocol.js';
 import './agent-setup.js';
+import './agent-scanner.js';
 import './agent-main.js';
 
 export class AgentApp extends LitElement {
@@ -62,23 +68,43 @@ export class AgentApp extends LitElement {
   async _init() {
     const profile = await storageService.getProfile();
 
-    if (profile) {
+    if (!profile) {
+      // No profile - need to complete setup first
+      this.screen = 'setup';
+    } else if (this.sessionId) {
+      // Has profile and session from URL - go to main
       this.profile = profile;
       this.screen = 'main';
     } else {
-      this.screen = 'setup';
+      // Has profile but no session - show scanner
+      this.profile = profile;
+      this.screen = 'scanner';
     }
   }
 
   async _onProfileCreated(e) {
     this.profile = e.detail.profile;
     await storageService.saveProfile(this.profile);
+
+    // After profile creation, go to scanner if no session, otherwise main
+    if (this.sessionId) {
+      this.screen = 'main';
+    } else {
+      this.screen = 'scanner';
+    }
+  }
+
+  _onSessionFound(e) {
+    this.sessionId = e.detail.sessionId;
     this.screen = 'main';
   }
 
   _onDisconnect() {
     this.peerService.destroy();
     this.peerService = new PeerService();
+    // Clear session and go back to scanner
+    this.sessionId = null;
+    this.screen = 'scanner';
   }
 
   render() {
@@ -89,6 +115,13 @@ export class AgentApp extends LitElement {
         <agent-setup
           @profile-created=${this._onProfileCreated}
         ></agent-setup>
+      ` : ''}
+
+      ${this.screen === 'scanner' ? html`
+        <agent-scanner
+          .profile=${this.profile}
+          @session-found=${this._onSessionFound}
+        ></agent-scanner>
       ` : ''}
 
       ${this.screen === 'main' ? html`

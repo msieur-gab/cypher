@@ -230,6 +230,11 @@ export class TerminalMain extends LitElement {
       return { output: 'cat: missing file operand', isError: true };
     }
 
+    // Auto-append .md extension if missing
+    if (!filename.includes('.')) {
+      filename = filename + '.md';
+    }
+
     const filePath = this._resolvePath(filename);
 
     // Check if it's a file (not a directory)
@@ -245,6 +250,11 @@ export class TerminalMain extends LitElement {
   _cmdDownload(filename) {
     if (!filename) {
       return { output: 'download: missing file operand', isError: true };
+    }
+
+    // Auto-append .md extension if missing
+    if (!filename.includes('.')) {
+      filename = filename + '.md';
     }
 
     const filePath = this._resolvePath(filename);
@@ -271,8 +281,10 @@ export class TerminalMain extends LitElement {
 
   _buildDataUrl(filePath) {
     // On GitHub Pages, fetch raw files from raw.githubusercontent.com
+    // URL format: msieur-gab.github.io/cypher/...
     if (window.location.hostname.endsWith('.github.io')) {
-      const [, owner, repo] = window.location.pathname.split('/');
+      const owner = window.location.hostname.split('.')[0]; // msieur-gab
+      const repo = window.location.pathname.split('/')[1];   // cypher
       return `https://raw.githubusercontent.com/${owner}/${repo}/main/data${filePath}`;
     }
     // Local development - fetch from same origin

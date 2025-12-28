@@ -128,10 +128,13 @@ export class AgentMain extends LitElement {
     this._isConnected = false;
     this._messages = [];
     this._command = '';
+    this._hasConnected = false;
   }
 
   updated(changedProps) {
-    if (changedProps.has('peerService') && this.peerService && this.sessionId) {
+    // Connect when we have all required props and haven't connected yet
+    if (!this._hasConnected && this.peerService && this.sessionId && this.profile) {
+      this._hasConnected = true;
       this._connect();
     }
   }

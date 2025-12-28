@@ -3,6 +3,7 @@
  */
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 import { TERM_MSG } from '../../shared/utils/protocol.js';
+import '../../shared/components/cypher-markdown.js';
 
 export class TerminalMain extends LitElement {
   static properties = {
@@ -341,8 +342,10 @@ export class TerminalMain extends LitElement {
     }
     if (item.type === 'file-content') {
       return html`
-        <div class="file-header">── ${item.filename} ──</div>
-        <div class="file-content">${item.content}</div>
+        <cypher-markdown
+          .filename=${item.filename}
+          .content=${item.content}
+        ></cypher-markdown>
       `;
     }
     if (item.type === 'download-success') {

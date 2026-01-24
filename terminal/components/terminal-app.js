@@ -63,7 +63,7 @@ export class TerminalApp extends LitElement {
 
   _buildAgentUrl() {
     const basePath = window.location.pathname.replace(/\/terminal\/?.*$/, '');
-    return `${window.location.origin}${basePath}/agent/?session=${this.sessionId}`;
+    return `${window.location.origin}${basePath}/?session=${this.sessionId}`;
   }
 
   _setupPeerEvents() {

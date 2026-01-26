@@ -8,7 +8,8 @@
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 import { PeerService } from '../../shared/services/peer-service.js';
 import { storageService } from '../../shared/services/storage-service.js';
-import { MSG } from '../../shared/utils/protocol.js';
+import { MSG, TERM_MSG } from '../../shared/utils/protocol.js';
+import { generateMnemonic, deriveIdentity, encrypt } from '../../shared/utils/crypto.js';
 import '../../shared/components/nexus-boot.js';
 import '../../shared/components/nexus-scanner.js';
 import '../../shared/components/nexus-avatar.js';
@@ -40,6 +41,10 @@ export class AgentApp extends LitElement {
     _downloads:        { type: Array, state: true },
     _selectedIntel:    { type: Object, state: true },
     _agentId:          { type: String, state: true },
+    _identity:         { type: Object, state: true },   // { did, publicKey } or null
+    _vaultOpen:        { type: Boolean, state: true },   // secure vault overlay
+    _vaultStep:        { type: String, state: true },    // generate | mnemonic | confirm | done
+    _mnemonic:         { type: String, state: true },
   };
 
   static styles = css`
@@ -430,6 +435,85 @@ export class AgentApp extends LitElement {
       margin-top: var(--nx-md);
     }
 
+    /* ========== Vault Activation ========== */
+    .vault-content {
+      padding: var(--nx-lg);
+      text-align: center;
+    }
+
+    .vault-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--nx-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: var(--nx-sm);
+    }
+
+    .vault-desc {
+      font-size: 11px;
+      color: var(--nx-fg-dim);
+      margin-bottom: var(--nx-lg);
+      line-height: 1.6;
+    }
+
+    .vault-warning {
+      font-size: 10px;
+      color: var(--nx-danger, #ff4444);
+      border: var(--nx-thin) solid var(--nx-danger, #ff4444);
+      padding: var(--nx-sm) var(--nx-md);
+      margin-bottom: var(--nx-lg);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .mnemonic-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--nx-sm);
+      margin-bottom: var(--nx-lg);
+      text-align: left;
+    }
+
+    .mnemonic-word {
+      font-size: 12px;
+      padding: var(--nx-xs) var(--nx-sm);
+      border: var(--nx-thin) solid var(--nx-border);
+      background: var(--nx-bg-raised);
+    }
+
+    .mnemonic-word .num {
+      color: var(--nx-fg-muted);
+      font-size: 9px;
+      margin-right: var(--nx-xs);
+    }
+
+    .vault-did {
+      font-size: 9px;
+      color: var(--nx-primary);
+      word-break: break-all;
+      padding: var(--nx-sm);
+      border: var(--nx-thin) solid var(--nx-primary);
+      margin-bottom: var(--nx-md);
+      text-align: left;
+      font-family: var(--nx-font);
+    }
+
+    .vault-did-label {
+      font-size: 9px;
+      color: var(--nx-fg-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: var(--nx-xs);
+    }
+
+    .vault-check {
+      font-size: 32px;
+      color: var(--nx-primary);
+      text-shadow: var(--nx-glow-lg);
+      margin-bottom: var(--nx-md);
+    }
+
     /* Override nexus-dock to sit in the flex layout */
     nexus-dock {
       position: relative;
@@ -456,6 +540,10 @@ export class AgentApp extends LitElement {
     this._downloads = [];
     this._selectedIntel = null;
     this._agentId = '';
+    this._identity = null;
+    this._vaultOpen = false;
+    this._vaultStep = 'generate';
+    this._mnemonic = '';
     this._clockInterval = null;
     this._swipeState = { active: false, startX: 0 };
     this.peerService = new PeerService();
@@ -493,6 +581,12 @@ export class AgentApp extends LitElement {
     } else {
       this.profile = this._loadedProfile;
       this._agentId = 'AG-' + Math.floor(1000 + Math.random() * 9000) + '-X';
+
+      // Load identity if exists
+      try {
+        const id = await storageService.getIdentity();
+        if (id) this._identity = { did: id.did, publicKey: id.publicKey };
+      } catch { /* empty */ }
 
       if (this.sessionId) {
         // Has session from QR URL — skip lock, go to main and auto-connect
@@ -664,6 +758,7 @@ export class AgentApp extends LitElement {
         this.peerService.send({
           type: MSG.INIT_STATE,
           profile: this.profile,
+          did: this._identity?.did || null,
         });
       });
 
@@ -688,6 +783,12 @@ export class AgentApp extends LitElement {
             this._toast('Failed to save intel', 'error');
           }
         }
+        if (data.type === TERM_MSG.MISSION_TRIGGER && data.mission === 'SECURE_VAULT') {
+          if (!this._identity) {
+            this._toast('Vault breach detected — secure your identity', 'warning');
+            this._openSecureVault();
+          }
+        }
       });
 
       this.peerService.addEventListener('error', e => {
@@ -699,6 +800,72 @@ export class AgentApp extends LitElement {
     this.peerService.connectAsAgent(this.sessionId);
   }
 
+  // ── Vault Activation (DID) ──
+
+  _openSecureVault() {
+    this._vaultStep = 'generate';
+    this._mnemonic = '';
+    this._vaultOpen = true;
+  }
+
+  _closeVault() {
+    this._vaultOpen = false;
+  }
+
+  async _generateVaultKeys() {
+    this._vaultStep = 'generating';
+    try {
+      const mnemonic = await generateMnemonic();
+      this._mnemonic = mnemonic;
+      this._vaultStep = 'mnemonic';
+    } catch (err) {
+      console.error('[Agent] Key generation failed:', err);
+      this._toast('Key generation failed', 'error');
+      this._vaultStep = 'generate';
+    }
+  }
+
+  _mnemonicConfirmed() {
+    this._vaultStep = 'confirm';
+  }
+
+  async _activateVault() {
+    this._vaultStep = 'activating';
+    try {
+      const identity = await deriveIdentity(this._mnemonic);
+
+      // Encrypt private key with storage key before persisting
+      const encryptedKey = await encrypt(identity.storageKey, identity.privateKey);
+
+      await storageService.saveIdentity({
+        did: identity.did,
+        publicKey: identity.publicKey,
+        encryptedKey,
+        storageKey: identity.storageKey,
+      });
+
+      // Update profile with DID and bump clearance
+      await storageService.updateDid(identity.did);
+      const newLevel = Math.max((this.profile?.level || 1) + 1, 2);
+      await storageService.updateLevel(newLevel);
+
+      this.profile = { ...this.profile, did: identity.did, level: newLevel };
+      this._identity = { did: identity.did, publicKey: identity.publicKey };
+
+      this._vaultStep = 'done';
+      this._toast('Vault secured — DID activated', 'success');
+    } catch (err) {
+      console.error('[Agent] Vault activation failed:', err);
+      this._toast('Vault activation failed', 'error');
+      this._vaultStep = 'confirm';
+    }
+  }
+
+  _finishVault() {
+    this._vaultOpen = false;
+    this._mnemonic = '';  // Clear sensitive data from memory
+  }
+
   // ── Reset ──
 
   async _resetAgent() {
@@ -708,6 +875,7 @@ export class AgentApp extends LitElement {
     this._peerListenersBound = false;
     await storageService.clearProfile();
     await storageService.clearDownloads();
+    await storageService.clearIdentity();
 
     this.profile = null;
     this.sessionId = null;
@@ -716,6 +884,8 @@ export class AgentApp extends LitElement {
     this._codename = '';
     this._avatarSrc = '';
     this._downloads = [];
+    this._identity = null;
+    this._mnemonic = '';
     this.screen = 'setup';
 
     // Clear session from URL
@@ -757,6 +927,16 @@ export class AgentApp extends LitElement {
         <nexus-button slot="footer" variant="secondary" @click=${this._closeScanner}>
           Cancel
         </nexus-button>
+      </nexus-overlay>
+
+      <!-- Vault Activation Sheet -->
+      <nexus-overlay
+        variant="sheet"
+        title="Secure Vault"
+        ?open=${this._vaultOpen}
+        @close=${this._vaultStep === 'done' ? this._finishVault : this._closeVault}
+      >
+        ${this._renderVaultContent()}
       </nexus-overlay>
 
       <!-- Toast Container -->
@@ -970,6 +1150,16 @@ export class AgentApp extends LitElement {
             ></nexus-avatar>
             <div class="profile-codename">${this.profile?.codename || 'AGENT'}</div>
             <div class="profile-level">Clearance Level ${this.profile?.level || 1}</div>
+            ${this._identity ? html`
+              <div class="vault-did-label" style="margin-top: var(--nx-md);">DID</div>
+              <div class="vault-did" style="font-size: 8px;">${this._identity.did}</div>
+            ` : html`
+              <div style="margin-top: var(--nx-md);">
+                <nexus-button variant="secondary" style="width: 100%;" @click=${this._openSecureVault}>
+                  Secure Vault
+                </nexus-button>
+              </div>
+            `}
             <div class="profile-stats">
               <div><div class="stat-value">0</div><div class="stat-label">Missions</div></div>
               <div><div class="stat-value">${this._downloads.length}</div><div class="stat-label">Intel</div></div>
@@ -1037,6 +1227,108 @@ export class AgentApp extends LitElement {
     }
   }
 
+  _renderVaultContent() {
+    switch (this._vaultStep) {
+      case 'generate':
+        return html`
+          <div class="vault-content">
+            <div class="vault-title">Vault Compromised</div>
+            <div class="vault-desc">
+              Your data is stored unencrypted. Anyone with access to this device
+              can read your intel files and profile data.
+            </div>
+            <div class="vault-warning">
+              Activate decentralized identity to secure your vault
+            </div>
+            <nexus-button variant="primary" style="width: 100%;" @click=${this._generateVaultKeys}>
+              Generate Identity Keys
+            </nexus-button>
+          </div>
+        `;
+
+      case 'generating':
+        return html`
+          <div class="vault-content">
+            <div class="vault-title">Generating Keys...</div>
+            <div class="vault-desc">
+              Deriving Ed25519 key pair and AES-256-GCM storage key.
+            </div>
+          </div>
+        `;
+
+      case 'mnemonic':
+        return html`
+          <div class="vault-content">
+            <div class="vault-title">Recovery Phrase</div>
+            <div class="vault-desc">
+              Write down these 12 words in order. This is the only way to
+              recover your identity if your vault is destroyed.
+            </div>
+            <div class="mnemonic-grid">
+              ${this._mnemonic.split(' ').map((word, i) => html`
+                <div class="mnemonic-word">
+                  <span class="num">${i + 1}.</span>${word}
+                </div>
+              `)}
+            </div>
+            <div class="vault-warning">
+              Do not share this phrase. Do not store it digitally.
+            </div>
+            <nexus-button variant="primary" style="width: 100%;" @click=${this._mnemonicConfirmed}>
+              I Have Saved My Phrase
+            </nexus-button>
+          </div>
+        `;
+
+      case 'confirm':
+        return html`
+          <div class="vault-content">
+            <div class="vault-title">Activate Encryption</div>
+            <div class="vault-desc">
+              Your recovery phrase is your last line of defense.
+              Once activated, all vault data will be encrypted with AES-256-GCM
+              and your identity secured with an Ed25519 DID.
+            </div>
+            <nexus-button variant="primary" style="width: 100%;" @click=${this._activateVault}>
+              Activate Secure Vault
+            </nexus-button>
+            <nexus-button variant="ghost" style="width: 100%; margin-top: var(--nx-sm);" @click=${() => { this._vaultStep = 'mnemonic'; }}>
+              Show Phrase Again
+            </nexus-button>
+          </div>
+        `;
+
+      case 'activating':
+        return html`
+          <div class="vault-content">
+            <div class="vault-title">Activating...</div>
+            <div class="vault-desc">
+              Deriving identity and encrypting vault storage.
+            </div>
+          </div>
+        `;
+
+      case 'done':
+        return html`
+          <div class="vault-content">
+            <div class="vault-check">[OK]</div>
+            <div class="vault-title">Vault Secured</div>
+            <div class="vault-did-label">Your Decentralized Identity</div>
+            <div class="vault-did">${this._identity?.did || ''}</div>
+            <div class="vault-desc">
+              Clearance level upgraded. Your vault is now encrypted.
+            </div>
+            <nexus-button variant="primary" style="width: 100%;" @click=${this._finishVault}>
+              Continue
+            </nexus-button>
+          </div>
+        `;
+
+      default:
+        return null;
+    }
+  }
+
   _renderCommsApp() {
     return html`
       <div class="app-screen">
@@ -1079,7 +1371,15 @@ export class AgentApp extends LitElement {
           </div>
           <div class="settings-item">
             <span class="settings-label">Encryption</span>
-            <span class="settings-value">AES-256-GCM</span>
+            <span class="settings-value" style=${this._identity ? '' : 'color: var(--nx-danger, #ff4444)'}>
+              ${this._identity ? 'AES-256-GCM' : 'NONE'}
+            </span>
+          </div>
+          <div class="settings-item">
+            <span class="settings-label">DID</span>
+            <span class="settings-value" style="font-size: 9px; max-width: 180px; overflow: hidden; text-overflow: ellipsis;">
+              ${this._identity?.did || 'Not activated'}
+            </span>
           </div>
           <div class="settings-item">
             <span class="settings-label">Version</span>

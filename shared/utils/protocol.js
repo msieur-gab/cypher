@@ -5,9 +5,12 @@
 // Agent → Terminal
 export const MSG = {
   // Connection
-  INIT_STATE: 'INIT_STATE',       // Agent sends profile on connect
+  INIT_STATE: 'INIT_STATE',       // Agent sends profile on connect (includes did + publicKey if secured)
   STATE_UPDATE: 'STATE_UPDATE',   // Agent state changed
   PONG: 'PONG',                   // Response to heartbeat
+
+  // DID handshake
+  KEY_EXCHANGE: 'KEY_EXCHANGE',   // Agent sends public key for ECDH session key derivation
 
   // Commands
   COMMAND: 'COMMAND',             // Agent sends command to terminal
@@ -20,6 +23,13 @@ export const MSG = {
 export const TERM_MSG = {
   WELCOME: 'WELCOME',             // Terminal acknowledges connection
   HEARTBEAT: 'HEARTBEAT',         // Keep-alive ping
+
+  // DID handshake
+  KEY_EXCHANGE: 'KEY_EXCHANGE',   // Terminal sends ephemeral public key back
+  SECURE_CHANNEL: 'SECURE_CHANNEL', // Terminal confirms encrypted channel established
+
+  // Missions
+  MISSION_TRIGGER: 'MISSION_TRIGGER', // Terminal triggers a mission on agent (e.g. SECURE_VAULT)
 
   // File system responses
   FILE_CONTENT: 'FILE_CONTENT',   // Terminal sends file to agent

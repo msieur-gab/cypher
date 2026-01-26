@@ -19,6 +19,10 @@ import '../../shared/components/nexus-toast.js';
 import '../../shared/components/nexus-status-badge.js';
 import '../../shared/components/nexus-desktop-icon.js';
 import '../../shared/components/nexus-dock.js';
+import '../../shared/components/nexus-file-browser.js';
+import '../../shared/components/nexus-list.js';
+import '../../shared/components/nexus-list-item.js';
+import '../../shared/components/nexus-markdown.js';
 import { requestWakeLock, releaseWakeLock } from './utils/wakelock.js';
 
 export class AgentApp extends LitElement {
@@ -34,6 +38,7 @@ export class AgentApp extends LitElement {
     _clockTime:        { type: String, state: true },
     _clockDate:        { type: String, state: true },
     _downloads:        { type: Array, state: true },
+    _selectedIntel:    { type: Object, state: true },
     _agentId:          { type: String, state: true },
   };
 
@@ -449,6 +454,7 @@ export class AgentApp extends LitElement {
     this._clockTime = '00:00';
     this._clockDate = '';
     this._downloads = [];
+    this._selectedIntel = null;
     this._agentId = '';
     this._clockInterval = null;
     this._swipeState = { active: false, startX: 0 };
@@ -601,6 +607,7 @@ export class AgentApp extends LitElement {
 
   _closeApp() {
     this.activeApp = null;
+    this._selectedIntel = null;
   }
 
   _goHome() {
@@ -647,43 +654,47 @@ export class AgentApp extends LitElement {
   _connectToTerminal() {
     this._connectionStatus = 'connecting';
 
-    this.peerService.addEventListener('connected', () => {
-      this._connectionStatus = 'online';
-      this._toast('Terminal connected', 'success');
+    if (!this._peerListenersBound) {
+      this._peerListenersBound = true;
 
-      this.peerService.send({
-        type: MSG.INIT_STATE,
-        profile: this.profile,
+      this.peerService.addEventListener('connected', () => {
+        this._connectionStatus = 'online';
+        this._toast('Terminal connected', 'success');
+
+        this.peerService.send({
+          type: MSG.INIT_STATE,
+          profile: this.profile,
+        });
       });
-    });
 
-    this.peerService.addEventListener('disconnected', () => {
-      this._connectionStatus = 'offline';
-      this._toast('Terminal disconnected', 'warning');
-    });
+      this.peerService.addEventListener('disconnected', () => {
+        this._connectionStatus = 'offline';
+        this._toast('Terminal disconnected', 'warning');
+      });
 
-    this.peerService.addEventListener('data', async (e) => {
-      const { data } = e.detail;
-      if (data.type === 'FILE_CONTENT') {
-        try {
-          await storageService.saveDownload({
-            filename: data.filename,
-            path: data.path,
-            content: data.content,
-          });
-          this._downloads = await storageService.getDownloads();
-          this._toast(`Intel acquired: ${data.filename}`, 'success');
-        } catch (err) {
-          console.error('[Agent] Failed to save download:', err);
-          this._toast('Failed to save intel', 'error');
+      this.peerService.addEventListener('data', async (e) => {
+        const { data } = e.detail;
+        if (data.type === 'FILE_CONTENT') {
+          try {
+            await storageService.saveDownload({
+              filename: data.filename,
+              path: data.path,
+              content: data.content,
+            });
+            this._downloads = await storageService.getDownloads();
+            this._toast(`Intel acquired: ${data.filename}`, 'success');
+          } catch (err) {
+            console.error('[Agent] Failed to save download:', err);
+            this._toast('Failed to save intel', 'error');
+          }
         }
-      }
-    });
+      });
 
-    this.peerService.addEventListener('error', e => {
-      console.error('[Agent] Peer error:', e.detail.error);
-      this._connectionStatus = 'offline';
-    });
+      this.peerService.addEventListener('error', e => {
+        console.error('[Agent] Peer error:', e.detail.error);
+        this._connectionStatus = 'offline';
+      });
+    }
 
     this.peerService.connectAsAgent(this.sessionId);
   }
@@ -694,6 +705,7 @@ export class AgentApp extends LitElement {
     releaseWakeLock();
     this.peerService.destroy();
     this.peerService = new PeerService();
+    this._peerListenersBound = false;
     await storageService.clearProfile();
     await storageService.clearDownloads();
 
@@ -970,35 +982,59 @@ export class AgentApp extends LitElement {
   }
 
   _renderIntelApp() {
+    if (this._downloads.length === 0) {
+      return html`
+        <div class="app-screen">
+          <div class="app-header">
+            <span class="app-title">Downloaded Intel</span>
+            <nexus-button variant="ghost" icon="close" icon-only @click=${this._closeApp}></nexus-button>
+          </div>
+          <div class="app-body">
+            <div class="comms-empty">
+              <div class="comms-empty-title">No intel downloaded</div>
+              <div class="comms-empty-sub">Connect to Terminal to access files</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     return html`
       <div class="app-screen">
         <div class="app-header">
           <span class="app-title">Downloaded Intel</span>
           <nexus-button variant="ghost" icon="close" icon-only @click=${this._closeApp}></nexus-button>
         </div>
-        <div class="app-body">
-          ${this._downloads.length > 0
-            ? this._downloads.map(dl => html`
-                <div class="intel-item">
-                  <div class="intel-item-header">
-                    <span class="intel-item-name">${dl.filename}</span>
-                    <span class="intel-item-badge">Intel</span>
-                  </div>
-                  <div class="intel-item-meta">
-                    Downloaded ${this._formatTime(dl.downloadedAt)} — ${dl.content?.length || 0} bytes
-                  </div>
-                </div>
-              `)
-            : html`
-                <div class="comms-empty">
-                  <div class="comms-empty-title">No intel downloaded</div>
-                  <div class="comms-empty-sub">Connect to Terminal to access files</div>
-                </div>
-              `
-          }
-        </div>
+        <nexus-file-browser
+          style="flex: 1; min-height: 0;"
+          @selection-change=${this._onIntelSelect}
+        >
+          <nexus-list slot="list" selectable>
+            ${this._downloads.map(dl => html`
+              <nexus-list-item
+                icon="file"
+                label=${dl.filename}
+                meta="${this._formatTime(dl.downloadedAt)} — ${dl.content?.length || 0} bytes"
+              ></nexus-list-item>
+            `)}
+          </nexus-list>
+          ${this._selectedIntel ? html`
+            <nexus-markdown
+              slot="detail"
+              .content=${this._selectedIntel.content || ''}
+              .filename=${this._selectedIntel.filename || ''}
+            ></nexus-markdown>
+          ` : null}
+        </nexus-file-browser>
       </div>
     `;
+  }
+
+  _onIntelSelect(e) {
+    const idx = e.detail.index;
+    if (idx >= 0 && idx < this._downloads.length) {
+      this._selectedIntel = this._downloads[idx];
+    }
   }
 
   _renderCommsApp() {

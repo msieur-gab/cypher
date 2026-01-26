@@ -563,7 +563,6 @@ export class AgentApp extends LitElement {
       if (this.sessionId) {
         // Has session from QR URL — skip lock, go to main and auto-connect
         this.screen = 'main';
-        requestWakeLock();
         this._connectToTerminal();
         try { this._downloads = await storageService.getDownloads(); } catch { /* empty */ }
       } else {
@@ -657,7 +656,6 @@ export class AgentApp extends LitElement {
 
   async _unlock() {
     this.screen = 'main';
-    requestWakeLock();
 
     // Load downloads
     try {
@@ -725,6 +723,7 @@ export class AgentApp extends LitElement {
 
       this.peerService.addEventListener('connected', () => {
         this._connectionStatus = 'online';
+        requestWakeLock();
         this._toast('Terminal connected', 'success');
 
         this.peerService.send({
@@ -736,6 +735,7 @@ export class AgentApp extends LitElement {
 
       this.peerService.addEventListener('disconnected', () => {
         this._connectionStatus = 'offline';
+        releaseWakeLock();
         this._toast('Terminal disconnected', 'warning');
       });
 

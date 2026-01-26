@@ -24,6 +24,8 @@ import '../../shared/components/nexus-file-browser.js';
 import '../../shared/components/nexus-list.js';
 import '../../shared/components/nexus-list-item.js';
 import '../../shared/components/nexus-markdown.js';
+import '../../shared/components/nexus-view.js';
+import '../../shared/components/nexus-card.js';
 import { requestWakeLock, releaseWakeLock } from './utils/wakelock.js';
 
 export class AgentApp extends LitElement {
@@ -255,6 +257,10 @@ export class AgentApp extends LitElement {
       color: var(--nx-fg-dim);
     }
 
+    .disconnect-btn {
+      --nx-fg-dim: var(--nx-danger, #ff4444);
+    }
+
     /* Main area */
     .main-area {
       flex: 1;
@@ -272,43 +278,6 @@ export class AgentApp extends LitElement {
       gap: var(--nx-lg);
       max-width: 300px;
       justify-items: center;
-    }
-
-    /* App screens */
-    .app-screen {
-      position: fixed;
-      top: 36px;
-      left: 0;
-      right: 0;
-      bottom: 64px;
-      background: var(--nx-bg);
-      z-index: 50;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .app-header {
-      height: 44px;
-      border-bottom: var(--nx-thin) solid var(--nx-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--nx-md);
-      background: var(--nx-bg-raised);
-      flex-shrink: 0;
-    }
-
-    .app-title {
-      font-size: 12px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-
-    .app-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: var(--nx-md);
     }
 
     /* Profile content */
@@ -333,9 +302,11 @@ export class AgentApp extends LitElement {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: var(--nx-md);
+      text-align: center;
+    }
+
+    nexus-card {
       margin-top: var(--nx-lg);
-      padding: var(--nx-md);
-      border: var(--nx-thin) solid var(--nx-border);
     }
 
     .stat-value {
@@ -866,6 +837,24 @@ export class AgentApp extends LitElement {
     this._mnemonic = '';  // Clear sensitive data from memory
   }
 
+  // ── Disconnect ──
+
+  _disconnectTerminal() {
+    releaseWakeLock();
+    this.peerService.destroy();
+    this.peerService = new PeerService();
+    this._peerListenersBound = false;
+    this._connectionStatus = 'offline';
+    this.sessionId = null;
+
+    // Clear session from URL
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    window.history.replaceState({}, '', url);
+
+    this._toast('Terminal disconnected', 'info');
+  }
+
   // ── Reset ──
 
   async _resetAgent() {
@@ -1086,8 +1075,11 @@ export class AgentApp extends LitElement {
           </div>
         </div>
 
-        <!-- Sub-App Screens -->
-        ${this.activeApp ? this._renderActiveApp() : null}
+        <!-- Sub-App Views (nexus-view handles visibility via ?active) -->
+        ${this._renderProfileApp()}
+        ${this._renderIntelApp()}
+        ${this._renderCommsApp()}
+        ${this._renderSettingsApp()}
 
         <!-- Dock -->
         <nexus-dock>
@@ -1119,104 +1111,89 @@ export class AgentApp extends LitElement {
               <polyline points="14 2 14 8 20 8"/>
             </svg>
           </nexus-dock-item>
+          ${this._connectionStatus !== 'offline' ? html`
+            <nexus-dock-item
+              slot="end"
+              class="disconnect-btn"
+              label="End"
+              @dock-item-click=${this._disconnectTerminal}
+            >
+              <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                <line x1="12" y1="2" x2="12" y2="12"/>
+              </svg>
+            </nexus-dock-item>
+          ` : null}
         </nexus-dock>
       </div>
     `;
   }
 
-  _renderActiveApp() {
-    switch (this.activeApp) {
-      case 'profile':  return this._renderProfileApp();
-      case 'intel':    return this._renderIntelApp();
-      case 'comms':    return this._renderCommsApp();
-      case 'settings': return this._renderSettingsApp();
-      default:         return null;
-    }
-  }
-
   _renderProfileApp() {
     return html`
-      <div class="app-screen">
-        <div class="app-header">
-          <span class="app-title">Agent Profile</span>
-          <nexus-button variant="ghost" icon="close" icon-only @click=${this._closeApp}></nexus-button>
-        </div>
-        <div class="app-body">
-          <div class="profile-card">
-            <nexus-avatar
-              size="100"
-              .src=${this.profile?.avatar || ''}
-              .name=${this.profile?.codename || ''}
-            ></nexus-avatar>
-            <div class="profile-codename">${this.profile?.codename || 'AGENT'}</div>
-            <div class="profile-level">Clearance Level ${this.profile?.level || 1}</div>
-            ${this._identity ? html`
-              <div class="vault-did-label" style="margin-top: var(--nx-md);">DID</div>
-              <div class="vault-did" style="font-size: 8px;">${this._identity.did}</div>
-            ` : html`
-              <div style="margin-top: var(--nx-md);">
-                <nexus-button variant="secondary" style="width: 100%;" @click=${this._openSecureVault}>
-                  Secure Vault
-                </nexus-button>
-              </div>
-            `}
+      <nexus-view title="Agent Profile" ?active=${this.activeApp === 'profile'} @close=${this._closeApp}>
+        <div class="profile-card">
+          <nexus-avatar
+            size="100"
+            .src=${this.profile?.avatar || ''}
+            .name=${this.profile?.codename || ''}
+          ></nexus-avatar>
+          <div class="profile-codename">${this.profile?.codename || 'AGENT'}</div>
+          <div class="profile-level">Clearance Level ${this.profile?.level || 1}</div>
+          ${this._identity ? html`
+            <div class="vault-did-label" style="margin-top: var(--nx-md);">DID</div>
+            <div class="vault-did" style="font-size: 8px;">${this._identity.did}</div>
+          ` : html`
+            <div style="margin-top: var(--nx-md);">
+              <nexus-button variant="secondary" style="width: 100%;" @click=${this._openSecureVault}>
+                Secure Vault
+              </nexus-button>
+            </div>
+          `}
+          <nexus-card>
             <div class="profile-stats">
               <div><div class="stat-value">0</div><div class="stat-label">Missions</div></div>
               <div><div class="stat-value">${this._downloads.length}</div><div class="stat-label">Intel</div></div>
               <div><div class="stat-value">--</div><div class="stat-label">Rating</div></div>
             </div>
-          </div>
+          </nexus-card>
         </div>
-      </div>
+      </nexus-view>
     `;
   }
 
   _renderIntelApp() {
-    if (this._downloads.length === 0) {
-      return html`
-        <div class="app-screen">
-          <div class="app-header">
-            <span class="app-title">Downloaded Intel</span>
-            <nexus-button variant="ghost" icon="close" icon-only @click=${this._closeApp}></nexus-button>
-          </div>
-          <div class="app-body">
-            <div class="comms-empty">
-              <div class="comms-empty-title">No intel downloaded</div>
-              <div class="comms-empty-sub">Connect to Terminal to access files</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
     return html`
-      <div class="app-screen">
-        <div class="app-header">
-          <span class="app-title">Downloaded Intel</span>
-          <nexus-button variant="ghost" icon="close" icon-only @click=${this._closeApp}></nexus-button>
-        </div>
-        <nexus-file-browser
-          style="flex: 1; min-height: 0;"
-          @selection-change=${this._onIntelSelect}
-        >
-          <nexus-list slot="list" selectable>
-            ${this._downloads.map(dl => html`
-              <nexus-list-item
-                icon="file"
-                label=${dl.filename}
-                meta="${this._formatTime(dl.downloadedAt)} — ${dl.content?.length || 0} bytes"
-              ></nexus-list-item>
-            `)}
-          </nexus-list>
-          ${this._selectedIntel ? html`
-            <nexus-markdown
-              slot="detail"
-              .content=${this._selectedIntel.content || ''}
-              .filename=${this._selectedIntel.filename || ''}
-            ></nexus-markdown>
-          ` : null}
-        </nexus-file-browser>
-      </div>
+      <nexus-view title="Downloaded Intel" ?active=${this.activeApp === 'intel'} @close=${this._closeApp}>
+        ${this._downloads.length === 0 ? html`
+          <div class="comms-empty">
+            <div class="comms-empty-title">No intel downloaded</div>
+            <div class="comms-empty-sub">Connect to Terminal to access files</div>
+          </div>
+        ` : html`
+          <nexus-file-browser
+            style="height: 100%;"
+            @selection-change=${this._onIntelSelect}
+          >
+            <nexus-list slot="list" selectable>
+              ${this._downloads.map(dl => html`
+                <nexus-list-item
+                  icon="file"
+                  label=${dl.filename}
+                  meta="${this._formatTime(dl.downloadedAt)} — ${dl.content?.length || 0} bytes"
+                ></nexus-list-item>
+              `)}
+            </nexus-list>
+            ${this._selectedIntel ? html`
+              <nexus-markdown
+                slot="detail"
+                .content=${this._selectedIntel.content || ''}
+                .filename=${this._selectedIntel.filename || ''}
+              ></nexus-markdown>
+            ` : null}
+          </nexus-file-browser>
+        `}
+      </nexus-view>
     `;
   }
 
@@ -1331,69 +1308,57 @@ export class AgentApp extends LitElement {
 
   _renderCommsApp() {
     return html`
-      <div class="app-screen">
-        <div class="app-header">
-          <span class="app-title">Communications</span>
-          <nexus-button variant="ghost" icon="close" icon-only @click=${this._closeApp}></nexus-button>
+      <nexus-view title="Communications" ?active=${this.activeApp === 'comms'} @close=${this._closeApp}>
+        <div class="comms-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <div class="comms-empty-title">No messages</div>
+          <div class="comms-empty-sub">Connect to Terminal to receive comms</div>
         </div>
-        <div class="app-body">
-          <div class="comms-empty">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <div class="comms-empty-title">No messages</div>
-            <div class="comms-empty-sub">Connect to Terminal to receive comms</div>
-          </div>
-        </div>
-      </div>
+      </nexus-view>
     `;
   }
 
   _renderSettingsApp() {
     return html`
-      <div class="app-screen">
-        <div class="app-header">
-          <span class="app-title">Configuration</span>
-          <nexus-button variant="ghost" icon="close" icon-only @click=${this._closeApp}></nexus-button>
+      <nexus-view title="Configuration" ?active=${this.activeApp === 'settings'} @close=${this._closeApp}>
+        <div class="settings-item">
+          <span class="settings-label">Terminal Status</span>
+          <nexus-status-badge
+            status=${this._connectionStatus === 'online' ? 'online' : 'offline'}
+            size="sm"
+            label=${this._connectionStatus === 'online' ? 'Connected' : 'Disconnected'}
+          ></nexus-status-badge>
         </div>
-        <div class="app-body">
-          <div class="settings-item">
-            <span class="settings-label">Terminal Status</span>
-            <nexus-status-badge
-              status=${this._connectionStatus === 'online' ? 'online' : 'offline'}
-              size="sm"
-              label=${this._connectionStatus === 'online' ? 'Connected' : 'Disconnected'}
-            ></nexus-status-badge>
-          </div>
-          <div class="settings-item">
-            <span class="settings-label">Agent ID</span>
-            <span class="settings-value">${this._agentId || 'AG-0000-X'}</span>
-          </div>
-          <div class="settings-item">
-            <span class="settings-label">Encryption</span>
-            <span class="settings-value" style=${this._identity ? '' : 'color: var(--nx-danger, #ff4444)'}>
-              ${this._identity ? 'AES-256-GCM' : 'NONE'}
-            </span>
-          </div>
-          <div class="settings-item">
-            <span class="settings-label">DID</span>
-            <span class="settings-value" style="font-size: 9px; max-width: 180px; overflow: hidden; text-overflow: ellipsis;">
-              ${this._identity?.did || 'Not activated'}
-            </span>
-          </div>
-          <div class="settings-item">
-            <span class="settings-label">Version</span>
-            <span class="settings-value">2.1.0</span>
-          </div>
-          <div style="margin-top: var(--nx-xl);">
-            <nexus-button
-              variant="secondary"
-              style="width: 100%;"
-              @click=${this._resetAgent}
-            >Reset Agent</nexus-button>
-          </div>
+        <div class="settings-item">
+          <span class="settings-label">Agent ID</span>
+          <span class="settings-value">${this._agentId || 'AG-0000-X'}</span>
         </div>
-      </div>
+        <div class="settings-item">
+          <span class="settings-label">Encryption</span>
+          <span class="settings-value" style=${this._identity ? '' : 'color: var(--nx-danger, #ff4444)'}>
+            ${this._identity ? 'AES-256-GCM' : 'NONE'}
+          </span>
+        </div>
+        <div class="settings-item">
+          <span class="settings-label">DID</span>
+          <span class="settings-value" style="font-size: 9px; max-width: 180px; overflow: hidden; text-overflow: ellipsis;">
+            ${this._identity?.did || 'Not activated'}
+          </span>
+        </div>
+        <div class="settings-item">
+          <span class="settings-label">Version</span>
+          <span class="settings-value">2.1.0</span>
+        </div>
+        <div style="margin-top: var(--nx-xl);">
+          <nexus-button
+            variant="secondary"
+            style="width: 100%;"
+            @click=${this._resetAgent}
+          >Reset Agent</nexus-button>
+        </div>
+      </nexus-view>
     `;
   }
 

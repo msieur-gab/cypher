@@ -26,6 +26,7 @@ import '../../shared/components/nexus-list-item.js';
 import '../../shared/components/nexus-markdown.js';
 import '../../shared/components/nexus-view.js';
 import '../../shared/components/nexus-card.js';
+import { icons } from '../../shared/components/nexus-icons.js';
 import { requestWakeLock, releaseWakeLock } from './utils/wakelock.js';
 
 export class AgentApp extends LitElement {
@@ -1118,10 +1119,7 @@ export class AgentApp extends LitElement {
               label="End"
               @dock-item-click=${this._disconnectTerminal}
             >
-              <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-                <line x1="12" y1="2" x2="12" y2="12"/>
-              </svg>
+              <svg slot="icon" viewBox="0 0 24 24" fill="none">${icons.power}</svg>
             </nexus-dock-item>
           ` : null}
         </nexus-dock>

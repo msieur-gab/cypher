@@ -1415,12 +1415,7 @@ export class TerminalApp extends LitElement {
         <div class="boot-overlay ${this._bootHidden ? 'hidden' : ''}">
           <div class="boot-content">
             <div class="boot-log">
-              ${this._bootLines.map((line, i) => html`
-                <div class="boot-line ${line.cls || ''}">
-                  ${line.text}${i === this._bootLines.length - 1 && this._bootCursor
-                    ? html`<span class="boot-cursor"></span>` : null}
-                </div>
-              `)}
+              ${this._bootLines.map((line, i) => html`<div class="boot-line ${line.cls || ''}">${line.text}${i === this._bootLines.length - 1 && this._bootCursor ? html`<span class="boot-cursor"></span>` : null}</div>`)}
             </div>
 
             ${this._bootPhase === 'qr' ? html`

@@ -9,6 +9,7 @@
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 import { PeerService } from '../../shared/services/peer-service.js';
 import { STATE, MSG } from '../../shared/utils/protocol.js';
+import { TerminalFS } from './services/terminal-fs.js';
 import '../../shared/components/nexus-boot.js';
 import '../../shared/components/nexus-qrcode.js';
 import '../../shared/components/nexus-header.js';
@@ -605,8 +606,19 @@ export class TerminalApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.peerService.createTerminal(this.sessionId);
     this._startClock();
+
+    if (new URLSearchParams(window.location.search).has('dev')) {
+      this.profile = { codename: 'DEV', level: 1, avatar: '' };
+      this.screen = 'boot';
+      this.updateComplete.then(() => {
+        const boot = this.renderRoot.querySelector('nexus-boot');
+        if (boot) boot.dismiss();
+      });
+      return;
+    }
+
+    this.peerService.createTerminal(this.sessionId);
   }
 
   disconnectedCallback() {
@@ -978,43 +990,15 @@ export class TerminalApp extends LitElement {
     const terminal = win.querySelector('#app-terminal');
     if (!terminal) return;
 
-    terminal.addEventListener('command', e => {
-      const { command, terminal: term } = e.detail;
-      const cmd = command.toLowerCase().split(' ')[0];
+    if (!this._terminalFS) {
+      this._terminalFS = new TerminalFS(terminal, this.peerService);
+    } else {
+      this._terminalFS.setTerminal(terminal);
+    }
 
-      switch (cmd) {
-        case 'help':
-          term.addLine('Available commands: ls, cd, cat, download, pwd, help, clear', 'output');
-          e.preventDefault();
-          break;
-        case 'ls':
-          term.addLine('intel/  personnel/  operations/  README.md', 'output');
-          e.preventDefault();
-          break;
-        case 'pwd':
-          term.addLine('/nexus/data', 'output');
-          e.preventDefault();
-          break;
-        case 'clear':
-          term.clear();
-          e.preventDefault();
-          break;
-        case 'cd':
-          term.addLine(`Changed directory to ${command.split(' ')[1] || '/'}`, 'output');
-          e.preventDefault();
-          break;
-        case 'cat': {
-          const file = command.split(' ')[1];
-          if (file) {
-            term.addLine(`Contents of ${file}:`, 'output');
-            term.addLine('[File content would be displayed here]', 'dim');
-          } else {
-            term.addLine('Usage: cat <filename>', 'error');
-          }
-          e.preventDefault();
-          break;
-        }
-      }
+    terminal.addEventListener('command', e => {
+      e.preventDefault();
+      this._terminalFS.execute(e.detail.command);
     });
   }
 

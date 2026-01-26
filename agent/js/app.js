@@ -662,11 +662,21 @@ export class AgentApp extends LitElement {
       this._toast('Terminal disconnected', 'warning');
     });
 
-    this.peerService.addEventListener('data', e => {
+    this.peerService.addEventListener('data', async (e) => {
       const { data } = e.detail;
-      // Handle incoming data from terminal
       if (data.type === 'FILE_CONTENT') {
-        this._toast('Intel received');
+        try {
+          await storageService.saveDownload({
+            filename: data.filename,
+            path: data.path,
+            content: data.content,
+          });
+          this._downloads = await storageService.getDownloads();
+          this._toast(`Intel acquired: ${data.filename}`, 'success');
+        } catch (err) {
+          console.error('[Agent] Failed to save download:', err);
+          this._toast('Failed to save intel', 'error');
+        }
       }
     });
 

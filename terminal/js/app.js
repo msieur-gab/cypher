@@ -553,6 +553,78 @@ export class TerminalApp extends LitElement {
       padding: var(--nx-md);
     }
 
+    /* ========== Agent Status Window ========== */
+    .agent-status-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--nx-lg);
+      gap: var(--nx-md);
+      font-family: var(--nx-font);
+    }
+
+    .agent-avatar {
+      width: 80px;
+      height: 80px;
+      border: var(--nx-thick) solid var(--nx-primary);
+      box-shadow: var(--nx-glow-lg);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--nx-bg);
+    }
+
+    .agent-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      image-rendering: pixelated;
+    }
+
+    .agent-avatar-placeholder {
+      font-size: 28px;
+      color: var(--nx-fg-muted);
+    }
+
+    .agent-codename {
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--nx-primary);
+      text-shadow: var(--nx-glow);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .agent-level {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--nx-fg-dim);
+      border: var(--nx-thin) solid var(--nx-border);
+      padding: 4px 12px;
+    }
+
+    .agent-details {
+      width: 100%;
+      background: var(--nx-bg-raised);
+      border: var(--nx-thin) solid var(--nx-border);
+      padding: var(--nx-md);
+      margin-top: var(--nx-sm);
+    }
+
+    .agent-detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: var(--nx-sm);
+      font-size: 11px;
+    }
+
+    .agent-detail-row:last-child { margin-bottom: 0; }
+    .agent-detail-label { color: var(--nx-fg-dim); }
+    .agent-detail-value { color: var(--nx-fg); }
+    .agent-detail-value.online { color: var(--nx-primary); }
+
     /* Preview content */
     .preview-content { padding: var(--nx-md); }
     .preview-header {
@@ -717,10 +789,11 @@ export class TerminalApp extends LitElement {
   // ── App definitions ──
 
   _apps = {
-    intel:    { title: 'Intel Browser',    width: 700, height: 450 },
-    terminal: { title: 'Terminal',          width: 500, height: 350 },
-    config:   { title: 'Configuration',     width: 420, height: 420 },
-    comms:    { title: 'Communications',    width: 450, height: 300 },
+    intel:        { title: 'Intel Browser',    width: 700, height: 450 },
+    terminal:     { title: 'Terminal',          width: 500, height: 350 },
+    config:       { title: 'Configuration',     width: 420, height: 420 },
+    comms:        { title: 'Communications',    width: 450, height: 300 },
+    agentStatus:  { title: 'Agent Status',      width: 320, height: 360 },
   };
 
   constructor() {
@@ -818,6 +891,7 @@ export class TerminalApp extends LitElement {
     this.peerService.addEventListener('disconnected', () => {
       console.log('[Terminal] Agent disconnected');
       this._connectionStatus = 'offline';
+      this._closeApp('agentStatus');
       if (this.profile) {
         this.screen = 'locked';
       }
@@ -838,8 +912,12 @@ export class TerminalApp extends LitElement {
     await this.updateComplete;
     this._applyReadyClasses();
 
-    // Auto-open intel browser
-    setTimeout(() => this._openApp('intel'), 800);
+    // Auto-open agent status + intel browser
+    setTimeout(() => this._openApp('agentStatus'), 600);
+    setTimeout(() => this._openApp('intel'), 1000);
+
+    const name = this.profile?.codename || 'AGENT';
+    this._toast(`Agent ${name} connected — secure channel established`, 'success');
   }
 
   _applyReadyClasses() {
@@ -943,11 +1021,12 @@ export class TerminalApp extends LitElement {
 
   _getWindowContent(id) {
     switch (id) {
-      case 'intel':    return this._getIntelContent();
-      case 'terminal': return this._getTerminalContent();
-      case 'config':   return this._getConfigContent();
-      case 'comms':    return this._getCommsContent();
-      default:         return '';
+      case 'intel':       return this._getIntelContent();
+      case 'terminal':    return this._getTerminalContent();
+      case 'config':      return this._getConfigContent();
+      case 'comms':       return this._getCommsContent();
+      case 'agentStatus': return this._getAgentStatusContent();
+      default:            return '';
     }
   }
 
@@ -1019,6 +1098,7 @@ export class TerminalApp extends LitElement {
 
   _getCommsContent() {
     const isOnline = this._connectionStatus === 'online';
+    const codename = this.profile?.codename || '--';
     return `
       <div class="comms-panel">
         <div class="comms-header">
@@ -1029,6 +1109,10 @@ export class TerminalApp extends LitElement {
           <div class="comms-row">
             <span class="comms-label">Status:</span>
             <span class="comms-value highlight">${isOnline ? 'ENCRYPTED' : 'OFFLINE'}</span>
+          </div>
+          <div class="comms-row">
+            <span class="comms-label">Agent:</span>
+            <span class="comms-value ${isOnline ? 'highlight' : ''}">${isOnline ? codename : '--'}</span>
           </div>
           <div class="comms-row">
             <span class="comms-label">Protocol:</span>
@@ -1044,6 +1128,53 @@ export class TerminalApp extends LitElement {
           </div>
         </div>
         <div class="comms-empty">No new messages.</div>
+      </div>
+    `;
+  }
+
+  _getAgentStatusContent() {
+    const p = this.profile;
+    const codename = p?.codename || 'UNKNOWN';
+    const level = p?.level || 1;
+    const avatar = p?.avatar || '';
+    const isOnline = this._connectionStatus === 'online';
+
+    const levelLabels = {
+      1: 'OPERATIVE',
+      2: 'FIELD AGENT',
+      3: 'SENIOR AGENT',
+      4: 'HANDLER',
+      5: 'DIRECTOR',
+    };
+    const levelLabel = levelLabels[level] || `LEVEL ${level}`;
+
+    return `
+      <div class="agent-status-panel">
+        <div class="agent-avatar">
+          ${avatar
+            ? `<img src="${avatar}" alt="${codename}">`
+            : `<div class="agent-avatar-placeholder">&#x2298;</div>`}
+        </div>
+        <div class="agent-codename">${codename}</div>
+        <div class="agent-level">Clearance: ${levelLabel}</div>
+        <div class="agent-details">
+          <div class="agent-detail-row">
+            <span class="agent-detail-label">Status:</span>
+            <span class="agent-detail-value online">${isOnline ? 'CONNECTED' : 'OFFLINE'}</span>
+          </div>
+          <div class="agent-detail-row">
+            <span class="agent-detail-label">Channel:</span>
+            <span class="agent-detail-value">P2P ENCRYPTED</span>
+          </div>
+          <div class="agent-detail-row">
+            <span class="agent-detail-label">Session:</span>
+            <span class="agent-detail-value">${this.sessionId}</span>
+          </div>
+          <div class="agent-detail-row">
+            <span class="agent-detail-label">Accreditation:</span>
+            <span class="agent-detail-value">Level ${level}</span>
+          </div>
+        </div>
       </div>
     `;
   }

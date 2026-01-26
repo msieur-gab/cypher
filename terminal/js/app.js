@@ -9,6 +9,7 @@
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 import { PeerService } from '../../shared/services/peer-service.js';
 import { STATE, MSG } from '../../shared/utils/protocol.js';
+import '../../shared/components/nexus-boot.js';
 import '../../shared/components/nexus-qrcode.js';
 import '../../shared/components/nexus-header.js';
 import '../../shared/components/nexus-avatar.js';
@@ -29,10 +30,6 @@ export class TerminalApp extends LitElement {
     profile:            { type: Object },
     sessionId:          { type: String },
     agentUrl:           { type: String },
-    _bootLines:         { type: Array, state: true },
-    _bootCursor:        { type: Boolean, state: true },
-    _bootPhase:         { type: String, state: true },  // narrative | qr
-    _bootHidden:        { type: Boolean, state: true },
     _clockTime:         { type: String, state: true },
     _desktopPattern:    { type: String, state: true },
     _crtActive:         { type: Boolean, state: true },
@@ -210,177 +207,6 @@ export class TerminalApp extends LitElement {
       color: var(--nx-bg);
       opacity: 1;
     }
-
-    /* ========== Boot Overlay ========== */
-    .boot-overlay {
-      position: fixed;
-      inset: 0;
-      background: var(--nx-bg);
-      z-index: 10000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: var(--nx-xl);
-      transition: opacity 0.6s, visibility 0.6s;
-    }
-
-    .boot-overlay.hidden {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-    }
-
-    .boot-content {
-      width: 100%;
-      max-width: 540px;
-      max-height: 80vh;
-      overflow-y: auto;
-    }
-
-    /* Boot lines */
-    .boot-line {
-      opacity: 0;
-      animation: bootFadeIn 0.15s forwards;
-      margin-bottom: 0.25em;
-      font-size: 14px;
-      line-height: 1.7;
-    }
-
-    .boot-line.dim { color: var(--nx-fg-dim); }
-    .boot-line.muted { color: var(--nx-fg-muted); }
-    .boot-line.primary { color: var(--nx-primary); }
-    .boot-line.highlight {
-      color: var(--nx-primary);
-      text-shadow: var(--nx-glow);
-      font-size: 16px;
-    }
-    .boot-line.logo {
-      color: var(--nx-primary);
-      text-shadow: var(--nx-glow-lg);
-      font-family: monospace;
-      font-size: 18px;
-      line-height: 1.1;
-      letter-spacing: -1px;
-      margin-bottom: 0;
-      white-space: pre;
-    }
-    .boot-line.header {
-      color: var(--nx-primary);
-      font-weight: bold;
-      margin-top: 1.2em;
-      margin-bottom: 0.4em;
-      font-size: 12px;
-      letter-spacing: 0.1em;
-    }
-    .boot-line.spacer { height: 0.6em; }
-    .boot-line.indent { padding-left: 1.5em; }
-
-    .boot-cursor {
-      display: inline-block;
-      width: 10px;
-      height: 16px;
-      background: var(--nx-primary);
-      animation: bootBlink 0.7s step-end infinite;
-      vertical-align: text-bottom;
-      margin-left: 4px;
-    }
-
-    @keyframes bootFadeIn { to { opacity: 1; } }
-    @keyframes bootBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-    /* QR Section */
-    .qr-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      margin-top: var(--nx-xl);
-      animation: bootFadeIn 0.5s forwards;
-    }
-
-    .qr-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.2em;
-      color: var(--nx-fg-dim);
-      margin-bottom: var(--nx-md);
-    }
-
-    .qr-wrapper {
-      padding: var(--nx-md);
-      border: var(--nx-thin) solid var(--nx-primary);
-      background: var(--nx-bg);
-      box-shadow: var(--nx-glow-lg);
-      margin-bottom: var(--nx-lg);
-    }
-
-    .qr-instructions {
-      font-size: 13px;
-      color: var(--nx-fg-dim);
-      max-width: 340px;
-      line-height: 1.6;
-    }
-
-    .qr-instructions strong { color: var(--nx-primary); }
-
-    .waiting-indicator {
-      display: flex;
-      align-items: center;
-      gap: var(--nx-sm);
-      margin-top: var(--nx-lg);
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--nx-fg-muted);
-    }
-
-    .waiting-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--nx-primary);
-      animation: waitPulse 1.5s ease-in-out infinite;
-    }
-
-    @keyframes waitPulse {
-      0%, 100% { opacity: 0.3; transform: scale(0.8); }
-      50% { opacity: 1; transform: scale(1); }
-    }
-
-    /* Skip / session */
-    .skip-btn {
-      position: fixed;
-      bottom: var(--nx-lg);
-      right: var(--nx-lg);
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--nx-fg-muted);
-      cursor: pointer;
-      padding: var(--nx-sm) var(--nx-md);
-      border: var(--nx-thin) solid var(--nx-border);
-      transition: all 0.15s;
-      z-index: 10001;
-      background: var(--nx-bg);
-    }
-
-    .skip-btn:hover {
-      color: var(--nx-primary);
-      border-color: var(--nx-primary);
-    }
-
-    .session-info {
-      position: fixed;
-      bottom: var(--nx-lg);
-      left: var(--nx-lg);
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--nx-fg-muted);
-      z-index: 10001;
-    }
-
-    .session-connected { color: var(--nx-primary); }
 
     /* ========== Header extras ========== */
     .status-text {
@@ -704,47 +530,6 @@ export class TerminalApp extends LitElement {
     .sys-info .val { color: var(--nx-primary); }
   `;
 
-  // ── Boot narrative ──
-
-  static _bootSequence = [
-    { text: '███╗   ██╗███████╗██╗  ██╗██╗   ██╗███████╗', cls: 'logo', delay: 40 },
-    { text: '████╗  ██║██╔════╝╚██╗██╔╝██║   ██║██╔════╝', cls: 'logo', delay: 40 },
-    { text: '██╔██╗ ██║█████╗   ╚███╔╝ ██║   ██║███████╗', cls: 'logo', delay: 40 },
-    { text: '██║╚██╗██║██╔══╝   ██╔██╗ ██║   ██║╚════██║', cls: 'logo', delay: 40 },
-    { text: '██║ ╚████║███████╗██╔╝ ██╗╚██████╔╝███████║', cls: 'logo', delay: 40 },
-    { text: '╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝', cls: 'logo', delay: 40 },
-    { text: '', cls: 'spacer', delay: 400 },
-    { text: '> TERMINAL v2.1.0', cls: 'dim', delay: 300 },
-    { text: '> Establishing secure environment...', cls: 'dim', delay: 250 },
-    { text: '', cls: 'spacer', delay: 200 },
-    { text: '[ BRIEFING ]', cls: 'header', delay: 350 },
-    { text: 'Welcome, Operative.', cls: '', delay: 250 },
-    { text: '', cls: 'spacer', delay: 100 },
-    { text: 'You are accessing the NEXUS network \u2014 a decentralized', cls: '', delay: 50 },
-    { text: 'intelligence system designed for one purpose:', cls: '', delay: 50 },
-    { text: 'to help you understand and protect your digital identity.', cls: 'primary', delay: 350 },
-    { text: '', cls: 'spacer', delay: 150 },
-    { text: '[ ARCHITECTURE ]', cls: 'header', delay: 400 },
-    { text: 'This terminal is a "dumb" display \u2014 it holds no secrets.', cls: '', delay: 60 },
-    { text: 'Your mobile device is your VAULT:', cls: '', delay: 60 },
-    { text: '\u2022 Stores all credentials and keys', cls: 'indent dim', delay: 50 },
-    { text: '\u2022 Holds downloaded intelligence', cls: 'indent dim', delay: 50 },
-    { text: '\u2022 Never transmits data to servers', cls: 'indent dim', delay: 50 },
-    { text: '', cls: 'spacer', delay: 100 },
-    { text: 'Communication happens peer-to-peer. No middleman.', cls: 'primary', delay: 350 },
-    { text: '', cls: 'spacer', delay: 150 },
-    { text: '[ MISSION ]', cls: 'header', delay: 400 },
-    { text: 'Investigate how your personal data flows through', cls: '', delay: 60 },
-    { text: 'the digital world. You will:', cls: '', delay: 60 },
-    { text: '\u2022 Intercept and decrypt intelligence files', cls: 'indent dim', delay: 50 },
-    { text: '\u2022 Uncover connections between data points', cls: 'indent dim', delay: 50 },
-    { text: '\u2022 Learn to protect your digital sovereignty', cls: 'indent dim', delay: 50 },
-    { text: '', cls: 'spacer', delay: 150 },
-    { text: '[ CONNECT ]', cls: 'header', delay: 400 },
-    { text: 'To begin, authenticate with your mobile agent.', cls: '', delay: 60 },
-    { text: 'Scan the QR code to establish a secure channel.', cls: 'primary', delay: 500 },
-  ];
-
   // ── Intel files ──
 
   static _intelFiles = [
@@ -802,17 +587,12 @@ export class TerminalApp extends LitElement {
     this.profile = null;
     this.sessionId = this._generateSessionId();
     this.agentUrl = this._buildAgentUrl();
-    this._bootLines = [];
-    this._bootCursor = false;
-    this._bootPhase = 'narrative';
-    this._bootHidden = false;
     this._clockTime = '00:00:00';
     this._desktopPattern = 'scanlines';
     this._crtActive = false;
     this._ready = false;
     this._connectionStatus = 'offline';
     this._openWindowIds = {};
-    this._booting = false;
 
     this.peerService = new PeerService();
     this._windowElements = new Map();
@@ -827,7 +607,6 @@ export class TerminalApp extends LitElement {
     super.connectedCallback();
     this.peerService.createTerminal(this.sessionId);
     this._startClock();
-    this._startBoot();
   }
 
   disconnectedCallback() {
@@ -901,20 +680,9 @@ export class TerminalApp extends LitElement {
   async _onAgentConnected() {
     this._connectionStatus = 'online';
 
-    // Fade boot overlay
-    this._bootHidden = true;
-    await this._delay(700);
-    this.screen = 'desktop';
-
-    // Run entry animations
-    await this._delay(100);
-    this._ready = true;
-    await this.updateComplete;
-    this._applyReadyClasses();
-
-    // Auto-open agent status + intel browser
-    setTimeout(() => this._openApp('agentStatus'), 600);
-    setTimeout(() => this._openApp('intel'), 1000);
+    // Fade boot overlay via nexus-boot component
+    const boot = this.renderRoot.querySelector('nexus-boot');
+    if (boot) boot.dismiss();
 
     const name = this.profile?.codename || 'AGENT';
     this._toast(`Agent ${name} connected — secure channel established`, 'success');
@@ -932,33 +700,19 @@ export class TerminalApp extends LitElement {
     });
   }
 
-  // ── Boot Sequence ──
+  _onBootComplete() {
+    this.screen = 'desktop';
 
-  async _startBoot() {
-    if (this._booting) return;
-    this._booting = true;
-    this._bootLines = [];
-    this._bootCursor = true;
-    this._bootPhase = 'narrative';
+    // Run entry animations
+    requestAnimationFrame(async () => {
+      this._ready = true;
+      await this.updateComplete;
+      this._applyReadyClasses();
 
-    await this._delay(600);
-
-    for (const item of TerminalApp._bootSequence) {
-      if (!this._booting) return; // interrupted by skip
-      this._bootLines = [...this._bootLines, item];
-      await this._delay(item.delay || 80);
-    }
-
-    // Narrative done → show QR
-    this._bootCursor = false;
-    this._bootPhase = 'qr';
-  }
-
-  _skipBoot() {
-    this._booting = false;
-    this._bootLines = [];
-    this._bootCursor = false;
-    this._bootPhase = 'qr';
+      // Auto-open agent status + intel browser
+      setTimeout(() => this._openApp('agentStatus'), 600);
+      setTimeout(() => this._openApp('intel'), 1000);
+    });
   }
 
   // ── Desktop: Window Management (imperative) ──
@@ -1304,7 +1058,6 @@ export class TerminalApp extends LitElement {
 
     this.profile = null;
     this._ready = false;
-    this._bootHidden = false;
     this._connectionStatus = 'offline';
 
     this.peerService.destroy();
@@ -1315,7 +1068,6 @@ export class TerminalApp extends LitElement {
     this.peerService.createTerminal(this.sessionId);
 
     this.screen = 'boot';
-    this._startBoot();
   }
 
   // ── Render ──
@@ -1411,42 +1163,13 @@ export class TerminalApp extends LitElement {
       <div class="crt-overlay ${this._crtActive ? 'active' : ''}"></div>
 
       <!-- Boot Overlay -->
-      ${this.screen === 'boot' ? html`
-        <div class="boot-overlay ${this._bootHidden ? 'hidden' : ''}">
-          <div class="boot-content">
-            <div class="boot-log">
-              ${this._bootLines.map((line, i) => html`<div class="boot-line ${line.cls || ''}">${line.text}${i === this._bootLines.length - 1 && this._bootCursor ? html`<span class="boot-cursor"></span>` : null}</div>`)}
-            </div>
-
-            ${this._bootPhase === 'qr' ? html`
-              <div class="qr-section">
-                <div class="qr-label">Agent Authentication Required</div>
-                <div class="qr-wrapper">
-                  <nexus-qrcode .value=${this.agentUrl} size="180"></nexus-qrcode>
-                </div>
-                <p class="qr-instructions">
-                  Open <strong>NEXUS Agent</strong> on your mobile device
-                  and scan this code to establish a secure connection.
-                </p>
-                <div class="waiting-indicator">
-                  <div class="waiting-dot"></div>
-                  <span>Awaiting agent connection</span>
-                </div>
-              </div>
-            ` : null}
-          </div>
-
-          <div class="session-info">
-            Session: ${this.sessionId}
-            ${this._connectionStatus === 'online'
-              ? html` <span class="session-connected">CONNECTED</span>` : null}
-          </div>
-
-          ${this._bootPhase === 'narrative' ? html`
-            <button class="skip-btn" @click=${this._skipBoot}>Skip</button>
-          ` : null}
-        </div>
-      ` : null}
+      <nexus-boot
+        mode="terminal"
+        qr-value=${this.agentUrl}
+        session-id=${this.sessionId}
+        ?active=${this.screen === 'boot'}
+        @boot-complete=${this._onBootComplete}
+      ></nexus-boot>
 
       <!-- Locked Screen -->
       ${this.screen === 'locked' ? html`

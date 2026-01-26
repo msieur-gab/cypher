@@ -1,14 +1,15 @@
 /**
  * NEXUS Agent App — Mobile vault interface
- * State machine: loading → setup → lock → boot → main
- *                                             ↕ sub-apps (profile, intel, comms, settings)
- *                                             ↕ scanner sheet (nexus-overlay)
- *                                             → lock (on lock action)
+ * State machine: loading → boot → setup (new) / lock (returning) → main
+ *                                                                   ↕ sub-apps (profile, intel, comms, settings)
+ *                                                                   ↕ scanner sheet (nexus-overlay)
+ *                                                                   → lock (on lock action)
  */
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 import { PeerService } from '../../shared/services/peer-service.js';
 import { storageService } from '../../shared/services/storage-service.js';
 import { MSG } from '../../shared/utils/protocol.js';
+import '../../shared/components/nexus-boot.js';
 import '../../shared/components/nexus-scanner.js';
 import '../../shared/components/nexus-avatar.js';
 import '../../shared/components/nexus-input.js';
@@ -32,8 +33,6 @@ export class AgentApp extends LitElement {
     _connectionStatus: { type: String, state: true },  // offline | connecting | online
     _clockTime:        { type: String, state: true },
     _clockDate:        { type: String, state: true },
-    _bootLines:        { type: Array, state: true },
-    _bootCursor:       { type: Boolean, state: true },
     _downloads:        { type: Array, state: true },
     _agentId:          { type: String, state: true },
   };
@@ -211,63 +210,6 @@ export class AgentApp extends LitElement {
       letter-spacing: 0.15em;
       color: var(--nx-fg-muted);
       pointer-events: none;
-    }
-
-    /* ========== Boot Screen ========== */
-    .boot-screen {
-      position: fixed;
-      inset: 0;
-      background: var(--nx-bg);
-      z-index: 1400;
-      display: flex;
-      flex-direction: column;
-      padding: var(--nx-lg);
-      overflow: hidden;
-    }
-
-    .boot-header {
-      font-size: 10px;
-      color: var(--nx-fg-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      margin-bottom: var(--nx-md);
-      padding-bottom: var(--nx-sm);
-      border-bottom: var(--nx-thin) solid var(--nx-border);
-    }
-
-    .boot-log {
-      flex: 1;
-      font-size: 12px;
-      line-height: 1.8;
-      overflow-y: auto;
-    }
-
-    .boot-line {
-      opacity: 0;
-      animation: bootFadeIn 0.15s forwards;
-      white-space: nowrap;
-    }
-
-    .boot-line.dim { color: var(--nx-fg-dim); }
-    .boot-line.success { color: var(--nx-primary); }
-
-    .boot-cursor {
-      display: inline-block;
-      width: 8px;
-      height: 14px;
-      background: var(--nx-primary);
-      animation: blink 0.8s step-end infinite;
-      vertical-align: text-bottom;
-      margin-left: 2px;
-    }
-
-    @keyframes bootFadeIn {
-      to { opacity: 1; }
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
     }
 
     /* ========== Main UI ========== */
@@ -494,24 +436,6 @@ export class AgentApp extends LitElement {
     }
   `;
 
-  // ── Boot sequence lines ──
-
-  _bootSequence = [
-    { text: 'NEXUS AGENT OS v2.1.0', cls: 'success' },
-    { text: 'Initializing secure environment...', cls: 'dim' },
-    { text: '[OK] Cryptographic modules loaded', cls: '' },
-    { text: '[OK] Secure enclave verified', cls: '' },
-    { text: '[OK] Agent credentials validated', cls: '' },
-    { text: 'Loading profile...', cls: 'dim' },
-    { text: '[OK] Memory isolation active', cls: '' },
-    { text: '[OK] Network stack initialized', cls: '' },
-    { text: 'Scanning for Terminal signals...', cls: 'dim' },
-    { text: '[--] No Terminal detected', cls: 'dim' },
-    { text: '[OK] Offline mode enabled', cls: '' },
-    { text: 'System ready.', cls: 'success' },
-    { text: '> Entering main interface...', cls: 'success' },
-  ];
-
   constructor() {
     super();
     this.screen = 'loading';
@@ -524,8 +448,6 @@ export class AgentApp extends LitElement {
     this._connectionStatus = 'offline';
     this._clockTime = '00:00';
     this._clockDate = '';
-    this._bootLines = [];
-    this._bootCursor = false;
     this._downloads = [];
     this._agentId = '';
     this._clockInterval = null;
@@ -553,18 +475,25 @@ export class AgentApp extends LitElement {
   // ── Init ──
 
   async _init() {
-    const profile = await storageService.getProfile();
+    // Always show boot splash first; store profile for routing after boot
+    this._loadedProfile = await storageService.getProfile();
+    this.screen = 'boot';
+  }
 
-    if (!profile) {
+  async _onBootComplete() {
+    if (!this._loadedProfile) {
+      // New user — go to setup
       this.screen = 'setup';
     } else {
-      this.profile = profile;
+      this.profile = this._loadedProfile;
       this._agentId = 'AG-' + Math.floor(1000 + Math.random() * 9000) + '-X';
 
       if (this.sessionId) {
-        // Has session from QR URL — skip to main and auto-connect
+        // Has session from QR URL — skip lock, go to main and auto-connect
         this.screen = 'main';
+        requestWakeLock();
         this._connectToTerminal();
+        try { this._downloads = await storageService.getDownloads(); } catch { /* empty */ }
       } else {
         this.screen = 'lock';
       }
@@ -654,32 +583,7 @@ export class AgentApp extends LitElement {
     }
   }
 
-  _unlock() {
-    this._runBoot();
-  }
-
-  // ── Boot Sequence ──
-
-  async _runBoot() {
-    this.screen = 'boot';
-    this._bootLines = [];
-    this._bootCursor = true;
-
-    // Update profile line
-    this._bootSequence[5] = {
-      text: `Loading profile: ${this.profile?.codename || 'AGENT'}`,
-      cls: 'dim',
-    };
-
-    for (const line of this._bootSequence) {
-      this._bootLines = [...this._bootLines, line];
-      const delay = line.cls === 'dim' ? 450 : 180;
-      await this._delay(delay);
-    }
-
-    // Boot complete
-    this._bootCursor = false;
-    await this._delay(600);
+  async _unlock() {
     this.screen = 'main';
     requestWakeLock();
 
@@ -687,10 +591,6 @@ export class AgentApp extends LitElement {
     try {
       this._downloads = await storageService.getDownloads();
     } catch { /* empty */ }
-  }
-
-  _delay(ms) {
-    return new Promise(r => setTimeout(r, ms));
   }
 
   // ── App Navigation ──
@@ -925,18 +825,11 @@ export class AgentApp extends LitElement {
 
   _renderBoot() {
     return html`
-      <div class="boot-screen">
-        <div class="boot-header">System Boot Sequence</div>
-        <div class="boot-log">
-          ${this._bootLines.map((line, i) => html`
-            <div class="boot-line ${line.cls || ''}">
-              ${line.text}${i === this._bootLines.length - 1 && this._bootCursor
-                ? html`<span class="boot-cursor"></span>`
-                : null}
-            </div>
-          `)}
-        </div>
-      </div>
+      <nexus-boot
+        mode="agent"
+        ?active=${this.screen === 'boot'}
+        @boot-complete=${this._onBootComplete}
+      ></nexus-boot>
     `;
   }
 

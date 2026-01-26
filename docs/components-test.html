@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEXUS Components Test</title>
+  <link rel="stylesheet" href="../shared/styles/base.css">
+  <style>
+    body {
+      padding: var(--nx-lg);
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    section {
+      margin-bottom: var(--nx-xl);
+      padding: var(--nx-md);
+      border: var(--nx-thin) solid var(--nx-border);
+    }
+
+    h2 {
+      margin-bottom: var(--nx-md);
+    }
+
+    .demo-row {
+      display: flex;
+      gap: var(--nx-sm);
+      flex-wrap: wrap;
+      margin-bottom: var(--nx-sm);
+    }
+
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: var(--nx-sm);
+    }
+
+    .icon-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--nx-xs);
+      padding: var(--nx-sm);
+      border: var(--nx-thin) solid var(--nx-border);
+    }
+
+    .icon-item svg {
+      width: 24px;
+      height: 24px;
+      color: var(--nx-primary);
+    }
+
+    .icon-item span {
+      font-size: var(--nx-text-sm);
+      color: var(--nx-fg-muted);
+    }
+
+    .stack-sm {
+      display: flex;
+      flex-direction: column;
+      gap: var(--nx-sm);
+    }
+  </style>
+</head>
+<body>
+  <h1>NEXUS Design System</h1>
+  <p>Component library test page</p>
+
+  <!-- Tokens -->
+  <section>
+    <h2>Tokens</h2>
+    <div class="demo-row">
+      <div style="width:60px; height:60px; background:var(--nx-primary); display:flex; align-items:center; justify-content:center; color:var(--nx-bg); font-size:10px;">primary</div>
+      <div style="width:60px; height:60px; background:var(--nx-primary-dim); display:flex; align-items:center; justify-content:center; color:var(--nx-bg); font-size:10px;">primary-dim</div>
+      <div style="width:60px; height:60px; background:var(--nx-fg); display:flex; align-items:center; justify-content:center; color:var(--nx-bg); font-size:10px;">fg</div>
+      <div style="width:60px; height:60px; background:var(--nx-fg-dim); display:flex; align-items:center; justify-content:center; color:var(--nx-bg); font-size:10px;">fg-dim</div>
+      <div style="width:60px; height:60px; background:var(--nx-fg-muted); display:flex; align-items:center; justify-content:center; color:var(--nx-bg); font-size:10px;">fg-muted</div>
+      <div style="width:60px; height:60px; background:var(--nx-bg-raised); border:1px solid var(--nx-border); display:flex; align-items:center; justify-content:center; color:var(--nx-fg); font-size:10px;">bg-raised</div>
+    </div>
+  </section>
+
+  <!-- Buttons -->
+  <section>
+    <h2>nexus-button</h2>
+
+    <h4>Variants</h4>
+    <div class="demo-row">
+      <nexus-button>Primary</nexus-button>
+      <nexus-button variant="secondary">Secondary</nexus-button>
+      <nexus-button variant="ghost">Ghost</nexus-button>
+    </div>
+
+    <h4>Sizes</h4>
+    <div class="demo-row">
+      <nexus-button size="sm">Small</nexus-button>
+      <nexus-button size="md">Medium</nexus-button>
+      <nexus-button size="lg">Large</nexus-button>
+    </div>
+
+    <h4>With Icons</h4>
+    <div class="demo-row">
+      <nexus-button icon="download">Download</nexus-button>
+      <nexus-button variant="secondary" icon="settings">Settings</nexus-button>
+      <nexus-button icon="close" icon-only></nexus-button>
+      <nexus-button variant="secondary" icon="menu" icon-only></nexus-button>
+      <nexus-button variant="ghost" icon="search" icon-only></nexus-button>
+    </div>
+
+    <h4>Disabled</h4>
+    <div class="demo-row">
+      <nexus-button disabled>Disabled</nexus-button>
+      <nexus-button variant="secondary" disabled>Disabled</nexus-button>
+    </div>
+  </section>
+
+  <!-- Icons -->
+  <section>
+    <h2>nexus-icons</h2>
+    <div class="icon-grid" id="icon-grid"></div>
+  </section>
+
+  <!-- Input -->
+  <section>
+    <h2>nexus-input</h2>
+
+    <h4>Basic</h4>
+    <div class="stack-sm" style="max-width: 300px;">
+      <nexus-input label="Username" placeholder="Enter username"></nexus-input>
+      <nexus-input label="Email" placeholder="you@example.com" required></nexus-input>
+    </div>
+
+    <h4>Types</h4>
+    <div class="stack-sm" style="max-width: 300px;">
+      <nexus-input type="search" placeholder="Search files..."></nexus-input>
+      <nexus-input type="password" label="Password" placeholder="Enter password"></nexus-input>
+    </div>
+
+    <h4>States</h4>
+    <div class="stack-sm" style="max-width: 300px;">
+      <nexus-input label="With Value" value="pre-filled value"></nexus-input>
+      <nexus-input label="With Error" value="invalid" error="This field has an error"></nexus-input>
+      <nexus-input label="Disabled" value="cannot edit" disabled></nexus-input>
+    </div>
+  </section>
+
+  <!-- Window -->
+  <section>
+    <h2>nexus-window</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      Windows are rendered in a separate container. Click buttons below to spawn.
+    </p>
+    <div class="demo-row">
+      <nexus-button onclick="spawnWindow()">Open Window</nexus-button>
+      <nexus-button variant="secondary" onclick="spawnWindow({noResize: true})">No Resize</nexus-button>
+      <nexus-button variant="secondary" onclick="spawnWindow({noShadow: true})">No Shadow</nexus-button>
+    </div>
+  </section>
+
+  <!-- Markdown -->
+  <section>
+    <h2>nexus-markdown</h2>
+    <nexus-markdown id="md-demo"></nexus-markdown>
+  </section>
+
+  <!-- List -->
+  <section>
+    <h2>nexus-list / nexus-list-item</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      Keyboard navigation: Arrow keys, Home/End, Enter/Space to activate
+    </p>
+    <div style="height: 250px; border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-list id="demo-list">
+        <nexus-list-item icon="file" label="intel-report.md" meta="2.4 KB"></nexus-list-item>
+        <nexus-list-item icon="file" label="personnel-dossier.md" meta="1.8 KB"></nexus-list-item>
+        <nexus-list-item icon="folder" label="operations" meta="3 items"></nexus-list-item>
+        <nexus-list-item icon="file" label="encrypted-data.bin" meta="512 B" disabled></nexus-list-item>
+        <nexus-list-item icon="file" label="network-logs.txt" meta="4.2 KB"></nexus-list-item>
+        <nexus-list-item icon="file" label="surveillance-notes.md" meta="890 B"></nexus-list-item>
+      </nexus-list>
+    </div>
+    <p id="list-status" style="color: var(--nx-fg-muted); margin-top: var(--nx-sm); font-size: var(--nx-text-sm);">
+      Select an item to see events
+    </p>
+  </section>
+
+  <!-- Toolbar -->
+  <section>
+    <h2>nexus-toolbar</h2>
+
+    <h4>Default</h4>
+    <nexus-toolbar>
+      <span slot="start" class="toolbar-title">Terminal</span>
+      <span class="toolbar-status">Connected</span>
+      <nexus-button slot="end" variant="ghost" icon="settings" icon-only></nexus-button>
+    </nexus-toolbar>
+
+    <h4 style="margin-top: var(--nx-md);">Transparent Variant</h4>
+    <div style="background: var(--nx-bg-raised); padding: var(--nx-sm);">
+      <nexus-toolbar variant="transparent">
+        <nexus-button slot="start" variant="ghost" icon="chevron-left" icon-only></nexus-button>
+        <span class="toolbar-title">File Browser</span>
+        <nexus-button slot="end" variant="ghost" icon="download" icon-only></nexus-button>
+      </nexus-toolbar>
+    </div>
+  </section>
+
+  <!-- Header -->
+  <section>
+    <h2>nexus-header</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      Resize browser to see mobile menu. Header is position:relative here for demo.
+    </p>
+    <div style="position: relative; border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-header title="NEXUS" style="position: relative;">
+        <span slot="menu" class="menu-item">Files</span>
+        <span slot="menu" class="menu-item">Intel</span>
+        <span slot="menu" class="menu-item">Network</span>
+        <span slot="status">ONLINE</span>
+      </nexus-header>
+    </div>
+  </section>
+
+  <!-- Dock -->
+  <section>
+    <h2>nexus-dock / nexus-dock-item</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      Dock is normally fixed to bottom. Shown inline here for demo.
+    </p>
+
+    <h4>Bottom Position (default)</h4>
+    <div style="position: relative; height: 80px; background: var(--nx-bg-raised); border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-dock id="demo-dock" style="position: absolute;">
+        <nexus-dock-item slot="start" label="Home" active>
+          <svg slot="icon" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" fill="none" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        </nexus-dock-item>
+        <nexus-dock-item label="Files">
+          <svg slot="icon" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" fill="none" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+        </nexus-dock-item>
+        <nexus-dock-item label="Intel">
+          <svg slot="icon" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" fill="none" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </nexus-dock-item>
+        <nexus-dock-item slot="end" label="Settings">
+          <svg slot="icon" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" fill="none" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+        </nexus-dock-item>
+      </nexus-dock>
+    </div>
+
+    <h4 style="margin-top: var(--nx-md);">Float Position</h4>
+    <div style="position: relative; height: 100px; background: var(--nx-bg-raised); border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-dock position="float" style="position: absolute; bottom: var(--nx-md);">
+        <nexus-dock-item label="Scan">
+          <svg slot="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+        </nexus-dock-item>
+        <nexus-dock-item label="Connect" active>
+          <svg slot="icon" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" fill="none" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+        </nexus-dock-item>
+        <nexus-dock-item label="Profile">
+          <svg slot="icon" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" fill="none" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        </nexus-dock-item>
+      </nexus-dock>
+    </div>
+  </section>
+
+  <!-- File Browser -->
+  <section>
+    <h2>nexus-file-browser</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      Two-pane list-detail view. Resize browser to &lt;640px to see mobile mode with back button.
+    </p>
+    <div style="height: 350px; border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-file-browser id="demo-browser" list-width="220px">
+        <span slot="list-header">Intel Files <span class="count">(6)</span></span>
+        <nexus-list slot="list" id="browser-list">
+          <nexus-list-item icon="file" label="mission-brief.md" meta="3.1 KB"></nexus-list-item>
+          <nexus-list-item icon="file" label="target-profile.md" meta="2.4 KB"></nexus-list-item>
+          <nexus-list-item icon="file" label="comm-intercept.md" meta="1.2 KB"></nexus-list-item>
+          <nexus-list-item icon="folder" label="evidence" meta="5 items"></nexus-list-item>
+          <nexus-list-item icon="file" label="timeline.md" meta="890 B"></nexus-list-item>
+          <nexus-list-item icon="file" label="contacts.md" meta="1.5 KB"></nexus-list-item>
+        </nexus-list>
+        <span slot="detail-header">Preview</span>
+        <div slot="detail" id="browser-preview" style="padding: var(--nx-md); color: var(--nx-fg-dim);">
+          <p style="text-align: center; padding: var(--nx-xl); color: var(--nx-fg-muted);">
+            Select a file to preview
+          </p>
+        </div>
+      </nexus-file-browser>
+    </div>
+  </section>
+
+  <!-- Desktop Icon -->
+  <section>
+    <h2>nexus-desktop-icon</h2>
+    <div class="demo-row" style="gap: var(--nx-lg); padding: var(--nx-md); background: var(--nx-bg-raised);">
+      <nexus-desktop-icon icon="settings" label="Config"></nexus-desktop-icon>
+      <nexus-desktop-icon icon="folder" label="Files"></nexus-desktop-icon>
+      <nexus-desktop-icon icon="terminal" label="Terminal"></nexus-desktop-icon>
+      <nexus-desktop-icon icon="database" label="Database" disabled></nexus-desktop-icon>
+    </div>
+  </section>
+
+  <!-- Terminal -->
+  <section>
+    <h2>nexus-terminal</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      Try commands: help, ls, pwd, clear. Arrow up/down for history.
+    </p>
+    <div style="height: 250px; border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-terminal id="demo-terminal" prompt="$" greeting="NEXUS Terminal v2.1.0&#10;Type 'help' for available commands."></nexus-terminal>
+    </div>
+  </section>
+
+  <!-- Tabs -->
+  <section>
+    <h2>nexus-tabs</h2>
+
+    <h4>Horizontal Tabs</h4>
+    <div style="height: 200px; border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-tabs>
+        <span slot="tab">Overview</span>
+        <span slot="tab">Details</span>
+        <span slot="tab">History</span>
+        <nexus-tab-panel style="padding: var(--nx-md);">
+          <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">Overview</h3>
+          <p style="color: var(--nx-fg-dim);">This is the overview panel content.</p>
+        </nexus-tab-panel>
+        <nexus-tab-panel style="padding: var(--nx-md);">
+          <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">Details</h3>
+          <p style="color: var(--nx-fg-dim);">Detailed information goes here.</p>
+        </nexus-tab-panel>
+        <nexus-tab-panel style="padding: var(--nx-md);">
+          <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">History</h3>
+          <p style="color: var(--nx-fg-dim);">Historical records and logs.</p>
+        </nexus-tab-panel>
+      </nexus-tabs>
+    </div>
+
+    <h4 style="margin-top: var(--nx-md);">Vertical Tabs</h4>
+    <div style="height: 200px; border: var(--nx-thin) solid var(--nx-border);">
+      <nexus-tabs vertical>
+        <span slot="tab">Intel</span>
+        <span slot="tab">Personnel</span>
+        <span slot="tab">Ops</span>
+        <nexus-tab-panel style="padding: var(--nx-md);">
+          <p style="color: var(--nx-fg-dim);">Intelligence reports and analysis.</p>
+        </nexus-tab-panel>
+        <nexus-tab-panel style="padding: var(--nx-md);">
+          <p style="color: var(--nx-fg-dim);">Personnel files and dossiers.</p>
+        </nexus-tab-panel>
+        <nexus-tab-panel style="padding: var(--nx-md);">
+          <p style="color: var(--nx-fg-dim);">Active and archived operations.</p>
+        </nexus-tab-panel>
+      </nexus-tabs>
+    </div>
+  </section>
+
+  <!-- Overlay -->
+  <section>
+    <h2>nexus-overlay</h2>
+    <div class="demo-row">
+      <nexus-button onclick="document.getElementById('demo-modal').show()">Open Modal</nexus-button>
+      <nexus-button variant="secondary" onclick="document.getElementById('demo-sheet').show()">Open Sheet</nexus-button>
+      <nexus-button variant="secondary" onclick="document.getElementById('demo-drawer').show()">Open Drawer</nexus-button>
+    </div>
+
+    <nexus-overlay id="demo-modal" variant="modal" title="Modal Dialog">
+      <div style="padding: var(--nx-md);">
+        <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+          This is a modal dialog. Press Escape or click the backdrop to close.
+        </p>
+        <nexus-input label="Input Field" placeholder="Enter something..."></nexus-input>
+      </div>
+      <nexus-button slot="footer" onclick="document.getElementById('demo-modal').close()">Cancel</nexus-button>
+      <nexus-button slot="footer">Confirm</nexus-button>
+    </nexus-overlay>
+
+    <nexus-overlay id="demo-sheet" variant="sheet" title="Bottom Sheet">
+      <div style="padding: var(--nx-md);">
+        <p style="color: var(--nx-fg-dim);">
+          This is a bottom sheet. Great for mobile actions and forms.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: var(--nx-sm); margin-top: var(--nx-md);">
+          <nexus-button variant="secondary" icon="download">Download File</nexus-button>
+          <nexus-button variant="secondary" icon="copy">Copy Link</nexus-button>
+          <nexus-button variant="secondary" icon="trash">Delete</nexus-button>
+        </div>
+      </div>
+    </nexus-overlay>
+
+    <nexus-overlay id="demo-drawer" variant="drawer" title="Side Drawer">
+      <div style="padding: var(--nx-md);">
+        <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+          This is a side drawer. Perfect for navigation or filters.
+        </p>
+        <nexus-list>
+          <nexus-list-item icon="home" label="Dashboard"></nexus-list-item>
+          <nexus-list-item icon="folder" label="Files"></nexus-list-item>
+          <nexus-list-item icon="user" label="Profile"></nexus-list-item>
+          <nexus-list-item icon="settings" label="Settings"></nexus-list-item>
+        </nexus-list>
+      </div>
+    </nexus-overlay>
+  </section>
+
+  <!-- Toast -->
+  <section>
+    <h2>nexus-toast</h2>
+    <div class="demo-row">
+      <nexus-button onclick="showToast('info')">Info Toast</nexus-button>
+      <nexus-button variant="secondary" onclick="showToast('success')">Success</nexus-button>
+      <nexus-button variant="secondary" onclick="showToast('warning')">Warning</nexus-button>
+      <nexus-button variant="secondary" onclick="showToast('error')">Error</nexus-button>
+    </div>
+  </section>
+
+  <!-- Status Badge -->
+  <section>
+    <h2>nexus-status-badge</h2>
+
+    <h4>Status Variants</h4>
+    <div class="demo-row" style="align-items: center;">
+      <nexus-status-badge status="online" label="Online"></nexus-status-badge>
+      <nexus-status-badge status="offline" label="Offline"></nexus-status-badge>
+      <nexus-status-badge status="connecting" label="Connecting"></nexus-status-badge>
+      <nexus-status-badge status="error" label="Error"></nexus-status-badge>
+      <nexus-status-badge status="warning" label="Warning"></nexus-status-badge>
+    </div>
+
+    <h4>Sizes</h4>
+    <div class="demo-row" style="align-items: center;">
+      <nexus-status-badge status="online" label="Small" size="sm"></nexus-status-badge>
+      <nexus-status-badge status="online" label="Medium" size="md"></nexus-status-badge>
+      <nexus-status-badge status="online" label="Large" size="lg"></nexus-status-badge>
+    </div>
+
+    <h4>Without Label</h4>
+    <div class="demo-row" style="align-items: center;">
+      <nexus-status-badge status="online"></nexus-status-badge>
+      <nexus-status-badge status="connecting"></nexus-status-badge>
+      <nexus-status-badge status="error"></nexus-status-badge>
+    </div>
+
+    <h4>Badge Variant (with border)</h4>
+    <div class="demo-row" style="align-items: center;">
+      <nexus-status-badge status="online" label="Terminal" variant="badge"></nexus-status-badge>
+      <nexus-status-badge status="error" label="Server" variant="badge"></nexus-status-badge>
+    </div>
+
+    <h4>With Pulse Animation</h4>
+    <div class="demo-row" style="align-items: center;">
+      <nexus-status-badge status="online" label="Active" pulse></nexus-status-badge>
+      <nexus-status-badge status="warning" label="Alert" pulse></nexus-status-badge>
+    </div>
+  </section>
+
+  <!-- QR Code -->
+  <section>
+    <h2>nexus-qrcode</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      QR code generator with themed styling.
+    </p>
+
+    <div class="demo-row" style="align-items: flex-start; gap: var(--nx-lg);">
+      <nexus-qrcode
+        id="demo-qr"
+        value="https://nexus.example.com/connect/abc123"
+        size="150"
+        label="Scan to Connect"
+      ></nexus-qrcode>
+
+      <div style="flex: 1; max-width: 300px;">
+        <div class="stack-sm">
+          <nexus-input
+            id="qr-input"
+            label="QR Value"
+            value="https://nexus.example.com/connect/abc123"
+            placeholder="Enter text to encode"
+          ></nexus-input>
+          <nexus-button onclick="updateQR()">Update QR</nexus-button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scanner -->
+  <section>
+    <h2>nexus-scanner</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      QR code scanner with cyberpunk styling. Requires camera access.
+    </p>
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: var(--nx-md);">
+      <nexus-scanner
+        id="demo-scanner"
+        size="250"
+        label="Point at QR Code"
+      ></nexus-scanner>
+
+      <div class="demo-row">
+        <nexus-button onclick="toggleScanner(true)">Start Scanner</nexus-button>
+        <nexus-button variant="secondary" onclick="toggleScanner(false)">Stop Scanner</nexus-button>
+      </div>
+
+      <p id="scanner-result" style="color: var(--nx-fg-muted); font-size: var(--nx-text-sm);">
+        Scanner inactive
+      </p>
+    </div>
+  </section>
+
+  <!-- Avatar -->
+  <section>
+    <h2>nexus-avatar</h2>
+    <p style="color: var(--nx-fg-dim); margin-bottom: var(--nx-md);">
+      Circular avatar with ASCII art camera capture effect.
+    </p>
+
+    <h4>Static Avatars</h4>
+    <div class="demo-row" style="align-items: flex-end; gap: var(--nx-lg);">
+      <nexus-avatar size="50" name="John Doe"></nexus-avatar>
+      <nexus-avatar size="80" name="Agent X"></nexus-avatar>
+      <nexus-avatar size="100" name="Shadow"></nexus-avatar>
+    </div>
+
+    <h4 style="margin-top: var(--nx-md);">With Name Display</h4>
+    <div class="demo-row" style="gap: var(--nx-lg);">
+      <nexus-avatar size="80" name="SPHINX"></nexus-avatar>
+      <nexus-avatar size="80" name="ORACLE"></nexus-avatar>
+      <nexus-avatar size="80" name="GHOST"></nexus-avatar>
+    </div>
+
+    <h4 style="margin-top: var(--nx-md);">Editable Avatar (Camera Capture)</h4>
+    <p style="color: var(--nx-fg-muted); margin-bottom: var(--nx-sm); font-size: var(--nx-text-sm);">
+      Click to activate camera and capture ASCII art avatar
+    </p>
+    <div style="display: flex; justify-content: center;">
+      <nexus-avatar
+        id="editable-avatar"
+        size="150"
+        name="Your Avatar"
+        editable
+      ></nexus-avatar>
+    </div>
+  </section>
+
+  <!-- Toast container (outside flow) -->
+  <nexus-toast-container id="toast-container" position="top-right"></nexus-toast-container>
+
+  <!-- Window container (outside main content flow) -->
+  <div id="window-container" style="position: fixed; inset: 0; pointer-events: none; z-index: 100;">
+  </div>
+
+  <script type="module">
+    import '../shared/components/nexus-button.js';
+    import '../shared/components/nexus-input.js';
+    import '../shared/components/nexus-window.js';
+    import '../shared/components/nexus-markdown.js';
+    import '../shared/components/nexus-list-item.js';
+    import '../shared/components/nexus-list.js';
+    import '../shared/components/nexus-toolbar.js';
+    import '../shared/components/nexus-header.js';
+    import '../shared/components/nexus-dock.js';
+    import '../shared/components/nexus-file-browser.js';
+    import '../shared/components/nexus-desktop-icon.js';
+    import '../shared/components/nexus-terminal.js';
+    import '../shared/components/nexus-tabs.js';
+    import '../shared/components/nexus-overlay.js';
+    import '../shared/components/nexus-toast.js';
+    import '../shared/components/nexus-status-badge.js';
+    import '../shared/components/nexus-qrcode.js';
+    import '../shared/components/nexus-scanner.js';
+    import '../shared/components/nexus-avatar.js';
+    import { icons } from '../shared/components/nexus-icons.js';
+    import { html, render } from 'https://esm.sh/lit@3';
+
+    // Render icon grid
+    const iconGrid = document.getElementById('icon-grid');
+    Object.keys(icons).forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'icon-item';
+      item.innerHTML = `
+        <svg viewBox="0 0 24 24"></svg>
+        <span>${name}</span>
+      `;
+      // Use Lit to render the SVG content
+      render(icons[name], item.querySelector('svg'));
+      iconGrid.appendChild(item);
+    });
+
+    // Markdown demo
+    document.getElementById('md-demo').content = `
+# Intel Report
+
+## Classification: **TOP SECRET**
+
+This is a sample document demonstrating the markdown renderer.
+
+### Key Points
+
+- First item with *emphasis*
+- Second item with **strong text**
+- Third item with \`inline code\`
+
+### Status
+
+- [COMPLETE] Phase 1
+- [ACTIVE] Phase 2
+- [PENDING] Phase 3
+
+---
+
+> This is a blockquote with important information.
+
+\`\`\`
+// Code block example
+function decrypt(data) {
+  return process(data);
+}
+\`\`\`
+    `;
+    document.getElementById('md-demo').filename = 'intel-report.md';
+
+    // Window spawning
+    let windowCount = 0;
+    let zIndex = 100;
+
+    window.spawnWindow = function(options = {}) {
+      const container = document.getElementById('window-container');
+      const win = document.createElement('nexus-window');
+
+      windowCount++;
+      win.title = `Window ${windowCount}`;
+      win.x = 150 + (windowCount - 1) * 30;
+      win.y = 80 + (windowCount - 1) * 30;
+      win.width = 400;
+      win.height = 300;
+      win.style.pointerEvents = 'auto';
+      win.style.zIndex = ++zIndex;
+
+      if (options.noResize) win.setAttribute('no-resize', '');
+      if (options.noShadow) win.setAttribute('no-shadow', '');
+
+      win.innerHTML = `
+        <div style="padding: var(--nx-md); color: var(--nx-fg-dim);">
+          <h3 style="margin-bottom: var(--nx-sm);">Window Content</h3>
+          <p>This is a draggable, resizable window component.</p>
+          <p>Try dragging the title bar or resizing from the corner.</p>
+          <div style="margin-top: var(--nx-md);">
+            <nexus-button size="sm" variant="secondary">Action</nexus-button>
+          </div>
+        </div>
+      `;
+
+      win.addEventListener('close', () => win.remove());
+      win.addEventListener('focus-window', () => {
+        win.style.zIndex = ++zIndex;
+      });
+
+      container.appendChild(win);
+    };
+
+    // List demo event handling
+    const demoList = document.getElementById('demo-list');
+    const listStatus = document.getElementById('list-status');
+
+    demoList?.addEventListener('selection-change', (e) => {
+      const { index, item } = e.detail;
+      listStatus.textContent = `Selected: ${item?.label || 'none'} (index: ${index})`;
+    });
+
+    demoList?.addEventListener('item-activate', (e) => {
+      const { item } = e.detail;
+      listStatus.textContent = `Activated: ${item?.label}`;
+    });
+
+    // File browser demo
+    const browserList = document.getElementById('browser-list');
+    const browserPreview = document.getElementById('browser-preview');
+
+    const previewContent = {
+      'mission-brief.md': `
+        <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">MISSION BRIEF</h3>
+        <p><strong>Classification:</strong> TOP SECRET</p>
+        <p><strong>Operation:</strong> SILENT WHISPER</p>
+        <hr style="border-color: var(--nx-border); margin: var(--nx-sm) 0;">
+        <p>Primary objective: Extract encrypted communications from target server...</p>
+      `,
+      'target-profile.md': `
+        <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">TARGET PROFILE</h3>
+        <p><strong>Codename:</strong> NIGHTINGALE</p>
+        <p><strong>Status:</strong> Active surveillance</p>
+        <hr style="border-color: var(--nx-border); margin: var(--nx-sm) 0;">
+        <p>Known associates: 3 confirmed, 2 suspected...</p>
+      `,
+      'comm-intercept.md': `
+        <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">COMM INTERCEPT</h3>
+        <p><strong>Timestamp:</strong> 2024-03-15 14:32:07 UTC</p>
+        <p><strong>Channel:</strong> Encrypted mesh network</p>
+        <hr style="border-color: var(--nx-border); margin: var(--nx-sm) 0;">
+        <code style="display: block; padding: var(--nx-sm); background: var(--nx-bg); color: var(--nx-fg-dim);">
+          [ENCRYPTED] Package ready for extraction...
+        </code>
+      `,
+      'evidence': `
+        <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">EVIDENCE FOLDER</h3>
+        <p style="color: var(--nx-fg-muted);">Contains 5 items</p>
+        <ul style="margin-top: var(--nx-sm); padding-left: var(--nx-md);">
+          <li>photo_001.jpg</li>
+          <li>audio_recording.mp3</li>
+          <li>document_scan.pdf</li>
+          <li>metadata.json</li>
+          <li>notes.txt</li>
+        </ul>
+      `,
+      'timeline.md': `
+        <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">TIMELINE</h3>
+        <ul style="padding-left: var(--nx-md);">
+          <li><strong>Day 1:</strong> Initial contact established</li>
+          <li><strong>Day 3:</strong> First data packet received</li>
+          <li><strong>Day 7:</strong> Encryption key obtained</li>
+          <li><strong>Day 12:</strong> Full access confirmed</li>
+        </ul>
+      `,
+      'contacts.md': `
+        <h3 style="color: var(--nx-primary); margin-bottom: var(--nx-sm);">CONTACTS</h3>
+        <p><strong>Handler:</strong> SPHINX</p>
+        <p><strong>Tech Support:</strong> ORACLE</p>
+        <p><strong>Field Agent:</strong> GHOST</p>
+      `
+    };
+
+    browserList?.addEventListener('selection-change', (e) => {
+      const { item } = e.detail;
+      if (item && browserPreview) {
+        const content = previewContent[item.label] || `<p style="color: var(--nx-fg-muted);">No preview available for ${item.label}</p>`;
+        browserPreview.innerHTML = content;
+      }
+    });
+
+    // Dock item click handling
+    const demoDock = document.getElementById('demo-dock');
+    demoDock?.addEventListener('dock-item-click', (e) => {
+      // Toggle active state
+      demoDock.querySelectorAll('nexus-dock-item').forEach(item => {
+        item.active = (item === e.detail.item);
+      });
+    });
+
+    // Terminal demo
+    const demoTerminal = document.getElementById('demo-terminal');
+    demoTerminal?.addEventListener('command', (e) => {
+      const { command, terminal } = e.detail;
+      const cmd = command.toLowerCase().split(' ')[0];
+
+      switch (cmd) {
+        case 'help':
+          terminal.addLine('Available commands: ls, pwd, clear, echo, date', 'output');
+          e.preventDefault();
+          break;
+        case 'ls':
+          terminal.addLine('intel/  personnel/  operations/  README.md', 'output');
+          e.preventDefault();
+          break;
+        case 'pwd':
+          terminal.addLine('/nexus/data', 'output');
+          e.preventDefault();
+          break;
+        case 'clear':
+          terminal.clear();
+          e.preventDefault();
+          break;
+        case 'echo':
+          terminal.addLine(command.substring(5), 'output');
+          e.preventDefault();
+          break;
+        case 'date':
+          terminal.addLine(new Date().toISOString(), 'output');
+          e.preventDefault();
+          break;
+      }
+    });
+
+    // Toast demo
+    const toastContainer = document.getElementById('toast-container');
+    window.showToast = function(variant) {
+      const messages = {
+        info: 'This is an informational message.',
+        success: 'Operation completed successfully!',
+        warning: 'Warning: Check your input.',
+        error: 'Error: Something went wrong.'
+      };
+      toastContainer?.[variant]?.(messages[variant]);
+    };
+
+    // QR Code demo
+    window.updateQR = function() {
+      const input = document.getElementById('qr-input');
+      const qr = document.getElementById('demo-qr');
+      if (input && qr) {
+        qr.value = input.value;
+      }
+    };
+
+    // Scanner demo
+    const demoScanner = document.getElementById('demo-scanner');
+    const scannerResult = document.getElementById('scanner-result');
+
+    window.toggleScanner = function(active) {
+      if (demoScanner) {
+        demoScanner.active = active;
+        scannerResult.textContent = active ? 'Scanning...' : 'Scanner inactive';
+      }
+    };
+
+    demoScanner?.addEventListener('scan-success', (e) => {
+      scannerResult.textContent = `Scanned: ${e.detail.data}`;
+      scannerResult.style.color = 'var(--nx-primary)';
+      toastContainer?.success?.(`QR Code scanned: ${e.detail.data.substring(0, 30)}...`);
+    });
+
+    demoScanner?.addEventListener('scan-error', (e) => {
+      scannerResult.textContent = `Error: ${e.detail.error}`;
+      scannerResult.style.color = '#ff4444';
+    });
+
+    // Avatar demo
+    const editableAvatar = document.getElementById('editable-avatar');
+
+    editableAvatar?.addEventListener('avatar-captured', (e) => {
+      toastContainer?.info?.('Avatar captured! Click Confirm to save.');
+    });
+
+    editableAvatar?.addEventListener('avatar-confirmed', (e) => {
+      toastContainer?.success?.('Avatar saved successfully!');
+    });
+
+    editableAvatar?.addEventListener('camera-error', (e) => {
+      toastContainer?.error?.(`Camera error: ${e.detail.error}`);
+    });
+  </script>
+</body>
+</html>

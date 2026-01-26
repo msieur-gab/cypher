@@ -1,5 +1,5 @@
 /**
- * CYPHER Terminal Boot Screen - Cyberpunk boot sequence animation
+ * NEXUS Terminal Boot Screen - Cyberpunk boot sequence animation
  */
 import { LitElement, html, css } from 'https://esm.sh/lit@3';
 
@@ -176,7 +176,23 @@ export class TerminalBoot extends LitElement {
 
     // Boot sequence
     await this._delay(500);
-    await addLine('CYPHER TERMINAL v2.1.0', 'info', false, 200);
+
+    const logo = [
+      "░▒▓███████▓▒░░▒▓████████▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░",
+      "░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░",
+      "░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░       ░▒▓█▓▒▒▓█▓▒░ ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░",
+      "░▒▓█▓▒░░▒▓█▓▒░▒▓██████▓▒░   ░▒▓███▓▒░  ░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░",
+      "░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        ░▒▓█▒▓█▓▒░ ░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░",
+      "░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░       ░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░",
+      "░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░░▒▓██████▓▒░"
+    ];
+
+    for (const line of logo) {
+      await addLine(line, 'highlight', false, 50);
+    }
+
+    await addLine('', '', false, 200);
+    await addLine('NEXUS TERMINAL v2.1.0', 'info', false, 200);
     await addLine('Copyright (c) 2025 EU Digital Sovereignty Unit', 'info', false, 400);
     await addLine('', '', false, 300);
 

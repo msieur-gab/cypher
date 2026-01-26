@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CYPHER Agent</title>
+    <style>
+        /* --- CYPHER Design Tokens --- */
+        :root {
+            --cypher-text-bright: #ffffff;
+            --cypher-text: #aaaaaa;
+            --cypher-text-dim: #888888;
+            --cypher-text-muted: #666666;
+            --cypher-text-faint: #444444;
+            --cypher-text-ghost: #333333;
+
+            --cypher-bg-darkest: #000000;
+            --cypher-bg-dark: #0a0a0a;
+            --cypher-bg: #111111;
+            --cypher-bg-light: #1a1a1a;
+        }
+
+        /* Default Theme (Cyan) */
+        body {
+            --cypher-primary: #00FFCC;
+            --cypher-primary-dim: #00CCAA;
+            --cypher-primary-glow: rgba(0, 255, 204, 0.5);
+            --cypher-primary-subtle: rgba(0, 255, 204, 0.2);
+            --cypher-primary-faint: rgba(0, 255, 204, 0.1);
+        }
+
+        /* Matrix Theme */
+        body.theme-matrix {
+            --cypher-primary: #00FF41;
+            --cypher-primary-dim: #00CC33;
+            --cypher-primary-glow: rgba(0, 255, 65, 0.5);
+            --cypher-primary-subtle: rgba(0, 255, 65, 0.2);
+            --cypher-primary-faint: rgba(0, 255, 65, 0.1);
+        }
+
+        /* --- Reset --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            background: var(--cypher-bg-darkest);
+            color: var(--cypher-primary);
+            min-height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        /* --- Boot Screen --- */
+        #boot-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--cypher-bg-darkest);
+            z-index: 2000;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #boot-log {
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        .boot-line {
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+        }
+
+        .boot-line.dim { color: var(--cypher-text-dim); }
+        .boot-line.success { color: var(--cypher-primary); }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* --- Lock Screen --- */
+        #lock-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--cypher-bg-darkest);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lock-time {
+            font-size: 4rem;
+            font-weight: bold;
+            text-shadow: 0 0 30px var(--cypher-primary-glow);
+            margin-bottom: 8px;
+        }
+
+        .lock-date {
+            font-size: 10px;
+            color: var(--cypher-text-dim);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 60px;
+        }
+
+        .lock-status {
+            font-size: 9px;
+            color: var(--cypher-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 40px;
+        }
+
+        .swipe-track {
+            width: 220px;
+            height: 50px;
+            border: 1px solid var(--cypher-primary);
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            position: relative;
+        }
+
+        .swipe-handle {
+            width: 40px;
+            height: 40px;
+            background: var(--cypher-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--cypher-bg-darkest);
+            font-size: 14px;
+            touch-action: none;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--cypher-primary-glow);
+        }
+
+        .swipe-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        /* --- Status Bar --- */
+        .status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 32px;
+            background: var(--cypher-bg-darkest);
+            border-bottom: 1px solid var(--cypher-primary-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            font-size: 10px;
+            z-index: 100;
+        }
+
+        .status-bar .system-name {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+        }
+
+        .status-bar .clock {
+            font-size: 12px;
+        }
+
+        .connection-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--cypher-text-muted);
+        }
+
+        .connection-dot.connected {
+            background: var(--cypher-primary);
+            box-shadow: 0 0 8px var(--cypher-primary-glow);
+        }
+
+        /* --- Main Area --- */
+        .main-area {
+            padding-top: 48px;
+            padding-bottom: 80px;
+            min-height: 100vh;
+            overflow-y: auto;
+        }
+
+        /* --- Icon Grid --- */
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            padding: 24px;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        .app-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .app-icon-box {
+            width: 56px;
+            height: 56px;
+            border: 1px solid var(--cypher-primary-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.15s;
+        }
+
+        .app-icon-box svg {
+            width: 24px;
+            height: 24px;
+            stroke: var(--cypher-primary);
+            stroke-width: 1.5;
+            fill: none;
+        }
+
+        .app-icon-box::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .app-icon:active .app-icon-box::before {
+            opacity: 0.5;
+        }
+
+        .app-icon:active .app-icon-box {
+            border-color: var(--cypher-primary);
+            box-shadow: 0 0 15px var(--cypher-primary-glow);
+        }
+
+        .app-icon-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--cypher-text-dim);
+        }
+
+        .app-icon:active .app-icon-label {
+            color: var(--cypher-primary);
+        }
+
+        /* --- App Screens --- */
+        .app-screen {
+            position: fixed;
+            top: 32px;
+            left: 0;
+            right: 0;
+            bottom: 64px;
+            background: var(--cypher-bg-darkest);
+            z-index: 50;
+            display: none;
+            flex-direction: column;
+            transform: translateY(20px);
+            opacity: 0;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .app-screen.active {
+            display: flex;
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .app-header {
+            height: 44px;
+            border-bottom: 1px solid var(--cypher-primary-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            background: var(--cypher-bg);
+        }
+
+        .app-title {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .app-close {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.6;
+        }
+
+        .app-close:active {
+            opacity: 1;
+        }
+
+        .app-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        /* --- Profile Card --- */
+        .profile-card {
+            text-align: center;
+            padding: 24px 16px;
+        }
+
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 2px solid var(--cypher-primary);
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            background: var(--cypher-bg);
+            box-shadow: 0 0 30px var(--cypher-primary-glow);
+        }
+
+        .profile-codename {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            text-shadow: 0 0 10px var(--cypher-primary-glow);
+        }
+
+        .profile-level {
+            font-size: 10px;
+            color: var(--cypher-text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 24px;
+        }
+
+        .profile-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            padding: 16px;
+            border: 1px solid var(--cypher-primary-subtle);
+            background: var(--cypher-bg);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 8px;
+            color: var(--cypher-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* --- Scanner Screen --- */
+        .scanner-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px;
+        }
+
+        .scanner-frame {
+            width: 200px;
+            height: 200px;
+            border: 2px solid var(--cypher-primary);
+            position: relative;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scanner-corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--cypher-primary);
+        }
+
+        .scanner-corner.tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        .scanner-corner.tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+        .scanner-corner.bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+        .scanner-corner.br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+        .scanner-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--cypher-primary);
+            box-shadow: 0 0 10px var(--cypher-primary-glow);
+            animation: scanLine 2s linear infinite;
+        }
+
+        @keyframes scanLine {
+            0% { top: 0; }
+            50% { top: calc(100% - 2px); }
+            100% { top: 0; }
+        }
+
+        .scanner-text {
+            font-size: 10px;
+            color: var(--cypher-text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            text-align: center;
+        }
+
+        .scanner-text.highlight {
+            color: var(--cypher-primary);
+            margin-top: 8px;
+        }
+
+        /* --- Intel List --- */
+        .intel-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .intel-item {
+            border: 1px solid var(--cypher-primary-subtle);
+            padding: 12px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .intel-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .intel-item:active::before {
+            opacity: 0.2;
+        }
+
+        .intel-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .intel-item-name {
+            font-size: 12px;
+            font-weight: bold;
+            position: relative;
+        }
+
+        .intel-item-badge {
+            font-size: 8px;
+            padding: 2px 6px;
+            border: 1px solid var(--cypher-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: relative;
+        }
+
+        .intel-item-meta {
+            font-size: 9px;
+            color: var(--cypher-text-muted);
+            position: relative;
+        }
+
+        /* --- Settings List --- */
+        .settings-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--cypher-primary-subtle);
+        }
+
+        .settings-label {
+            font-size: 12px;
+        }
+
+        .settings-value {
+            font-size: 11px;
+            color: var(--cypher-text-dim);
+        }
+
+        .toggle-switch {
+            width: 40px;
+            height: 22px;
+            border: 1px solid var(--cypher-primary);
+            border-radius: 11px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 14px;
+            height: 14px;
+            background: var(--cypher-primary);
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(18px);
+        }
+
+        /* --- Dock --- */
+        .dock {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            background: var(--cypher-bg-darkest);
+            border-top: 1px solid var(--cypher-primary-subtle);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding-bottom: env(safe-area-inset-bottom);
+            z-index: 100;
+        }
+
+        .dock-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            padding: 8px 16px;
+            opacity: 0.6;
+            transition: opacity 0.15s;
+        }
+
+        .dock-btn:active,
+        .dock-btn.active {
+            opacity: 1;
+        }
+
+        .dock-btn svg {
+            width: 20px;
+            height: 20px;
+            stroke: var(--cypher-primary);
+            stroke-width: 1.5;
+            fill: none;
+        }
+
+        .dock-btn-label {
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* --- CRT Overlay --- */
+        .crt-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 9999;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.1) 0px,
+                rgba(0, 0, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            opacity: 0.3;
+        }
+
+        /* Hidden by default */
+        #main-ui { display: none; }
+    </style>
+</head>
+<body>
+    <div class="crt-overlay"></div>
+
+    <!-- Boot Screen -->
+    <div id="boot-screen">
+        <div id="boot-log"></div>
+    </div>
+
+    <!-- Lock Screen -->
+    <div id="lock-screen">
+        <div class="lock-time" id="lockTime">00:00</div>
+        <div class="lock-date" id="lockDate">Loading...</div>
+        <div class="lock-status">CYPHER AGENT v2.1</div>
+        <div class="swipe-track">
+            <span class="swipe-text">Slide to unlock</span>
+            <div class="swipe-handle" id="swipeHandle">→</div>
+        </div>
+    </div>
+
+    <!-- Main UI -->
+    <div id="main-ui">
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="system-name">
+                <div class="connection-dot" id="connectionDot"></div>
+                <span>CYPHER</span>
+            </div>
+            <div class="clock" id="topClock">00:00</div>
+        </div>
+
+        <!-- Main Area with Icon Grid -->
+        <div class="main-area">
+            <div class="icon-grid">
+                <div class="app-icon" onclick="openApp('scanner')">
+                    <div class="app-icon-box">
+                        <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10"/></svg>
+                    </div>
+                    <span class="app-icon-label">Scan</span>
+                </div>
+                <div class="app-icon" onclick="openApp('profile')">
+                    <div class="app-icon-box">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+                    </div>
+                    <span class="app-icon-label">Profile</span>
+                </div>
+                <div class="app-icon" onclick="openApp('intel')">
+                    <div class="app-icon-box">
+                        <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <span class="app-icon-label">Intel</span>
+                </div>
+                <div class="app-icon" onclick="openApp('comms')">
+                    <div class="app-icon-box">
+                        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <span class="app-icon-label">Comms</span>
+                </div>
+                <div class="app-icon" onclick="openApp('settings')">
+                    <div class="app-icon-box">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </div>
+                    <span class="app-icon-label">Config</span>
+                </div>
+                <div class="app-icon" onclick="toggleTheme()">
+                    <div class="app-icon-box">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    </div>
+                    <span class="app-icon-label">Theme</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- App: Scanner -->
+        <div class="app-screen" id="app-scanner">
+            <div class="app-header">
+                <span class="app-title">Terminal Scanner</span>
+                <div class="app-close" onclick="closeApp('scanner')">✕</div>
+            </div>
+            <div class="app-body">
+                <div class="scanner-container">
+                    <div class="scanner-frame">
+                        <div class="scanner-corner tl"></div>
+                        <div class="scanner-corner tr"></div>
+                        <div class="scanner-corner bl"></div>
+                        <div class="scanner-corner br"></div>
+                        <div class="scanner-line"></div>
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--cypher-primary)" stroke-width="1" opacity="0.3">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M7 7h3v3H7zM14 7h3v3h-3zM7 14h3v3H7z"/>
+                        </svg>
+                    </div>
+                    <div class="scanner-text">Point camera at Terminal QR code</div>
+                    <div class="scanner-text highlight">Waiting for QR...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- App: Profile -->
+        <div class="app-screen" id="app-profile">
+            <div class="app-header">
+                <span class="app-title">Agent Profile</span>
+                <div class="app-close" onclick="closeApp('profile')">✕</div>
+            </div>
+            <div class="app-body">
+                <div class="profile-card">
+                    <div class="profile-avatar">◇</div>
+                    <div class="profile-codename">GHOST</div>
+                    <div class="profile-level">Clearance Level 3</div>
+                    <div class="profile-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">12</div>
+                            <div class="stat-label">Missions</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">47</div>
+                            <div class="stat-label">Intel</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">89%</div>
+                            <div class="stat-label">Rating</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- App: Intel -->
+        <div class="app-screen" id="app-intel">
+            <div class="app-header">
+                <span class="app-title">Downloaded Intel</span>
+                <div class="app-close" onclick="closeApp('intel')">✕</div>
+            </div>
+            <div class="app-body">
+                <div class="intel-list">
+                    <div class="intel-item" onclick="triggerHaptic(10)">
+                        <div class="intel-item-header">
+                            <span class="intel-item-name">OPERATION_NEXUS.md</span>
+                            <span class="intel-item-badge">Secret</span>
+                        </div>
+                        <div class="intel-item-meta">Downloaded 2h ago • 4.2 KB</div>
+                    </div>
+                    <div class="intel-item" onclick="triggerHaptic(10)">
+                        <div class="intel-item-header">
+                            <span class="intel-item-name">PERSONNEL_CHEN.md</span>
+                            <span class="intel-item-badge">Conf</span>
+                        </div>
+                        <div class="intel-item-meta">Downloaded 1d ago • 2.8 KB</div>
+                    </div>
+                    <div class="intel-item" onclick="triggerHaptic(10)">
+                        <div class="intel-item-header">
+                            <span class="intel-item-name">INTERCEPT_7734.md</span>
+                            <span class="intel-item-badge">Secret</span>
+                        </div>
+                        <div class="intel-item-meta">Downloaded 3d ago • 1.5 KB</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- App: Comms -->
+        <div class="app-screen" id="app-comms">
+            <div class="app-header">
+                <span class="app-title">Communications</span>
+                <div class="app-close" onclick="closeApp('comms')">✕</div>
+            </div>
+            <div class="app-body">
+                <div style="text-align: center; padding: 40px 20px; color: var(--cypher-text-muted);">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin: 0 auto 16px; opacity: 0.5;">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;">No messages</div>
+                    <div style="font-size: 10px; margin-top: 8px; opacity: 0.6;">Connect to Terminal to receive comms</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- App: Settings -->
+        <div class="app-screen" id="app-settings">
+            <div class="app-header">
+                <span class="app-title">Configuration</span>
+                <div class="app-close" onclick="closeApp('settings')">✕</div>
+            </div>
+            <div class="app-body">
+                <div class="settings-list">
+                    <div class="settings-item">
+                        <span class="settings-label">Theme</span>
+                        <span class="settings-value" onclick="toggleTheme()">Cyan / Matrix</span>
+                    </div>
+                    <div class="settings-item">
+                        <span class="settings-label">Haptic Feedback</span>
+                        <div class="toggle-switch active" onclick="this.classList.toggle('active'); triggerHaptic(10);"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span class="settings-label">CRT Effect</span>
+                        <div class="toggle-switch active" onclick="this.classList.toggle('active'); document.querySelector('.crt-overlay').style.display = this.classList.contains('active') ? 'block' : 'none';"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span class="settings-label">Agent ID</span>
+                        <span class="settings-value">AG-7734-X</span>
+                    </div>
+                    <div class="settings-item">
+                        <span class="settings-label">Version</span>
+                        <span class="settings-value">2.1.0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dock -->
+        <div class="dock">
+            <div class="dock-btn active" onclick="goHome()">
+                <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span class="dock-btn-label">Home</span>
+            </div>
+            <div class="dock-btn" onclick="openApp('scanner')">
+                <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></svg>
+                <span class="dock-btn-label">Scan</span>
+            </div>
+            <div class="dock-btn" onclick="openApp('intel')">
+                <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span class="dock-btn-label">Intel</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* --- Boot Sequence --- */
+        const bootLines = [
+            { text: '> CYPHER AGENT v2.1.0', dim: true },
+            { text: '> Initializing secure enclave...', dim: true },
+            { text: '> Loading cryptographic modules...', dim: true },
+            { text: '> [OK] AES-256-GCM ready', dim: false },
+            { text: '> Checking device integrity...', dim: true },
+            { text: '> [OK] Device verified', dim: false },
+            { text: '> Establishing P2P protocols...', dim: true },
+            { text: '> [OK] WebRTC initialized', dim: false },
+            { text: '> System ready.', dim: false },
+        ];
+
+        let bootIndex = 0;
+
+        function runBoot() {
+            const log = document.getElementById('boot-log');
+
+            if (bootIndex < bootLines.length) {
+                const line = bootLines[bootIndex];
+                const p = document.createElement('div');
+                p.className = 'boot-line' + (line.dim ? ' dim' : ' success');
+                p.textContent = line.text;
+                p.style.animationDelay = '0s';
+                log.appendChild(p);
+                bootIndex++;
+                setTimeout(runBoot, 150 + Math.random() * 100);
+            } else {
+                setTimeout(() => {
+                    document.getElementById('boot-screen').style.display = 'none';
+                    document.getElementById('lock-screen').style.display = 'flex';
+                }, 500);
+            }
+        }
+
+        /* --- Lock Screen --- */
+        const swipeHandle = document.getElementById('swipeHandle');
+        const swipeTrack = document.querySelector('.swipe-track');
+        let startX = 0;
+        let isSwiping = false;
+
+        swipeHandle.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+            isSwiping = true;
+            triggerHaptic(10);
+        });
+
+        swipeHandle.addEventListener('touchmove', (e) => {
+            if (!isSwiping) return;
+            let dx = e.touches[0].clientX - startX;
+            const maxX = swipeTrack.offsetWidth - swipeHandle.offsetWidth - 10;
+            dx = Math.max(0, Math.min(dx, maxX));
+            swipeHandle.style.transform = `translateX(${dx}px)`;
+
+            if (dx >= maxX) {
+                isSwiping = false;
+                unlock();
+            }
+        });
+
+        swipeHandle.addEventListener('touchend', () => {
+            if (isSwiping) {
+                swipeHandle.style.transform = 'translateX(0)';
+                isSwiping = false;
+            }
+        });
+
+        // Click for desktop testing
+        swipeHandle.addEventListener('click', unlock);
+
+        function unlock() {
+            triggerHaptic([30, 50, 30]);
+            document.getElementById('lock-screen').style.opacity = '0';
+            document.getElementById('lock-screen').style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('main-ui').style.display = 'block';
+            }, 300);
+        }
+
+        /* --- Apps --- */
+        function openApp(id) {
+            triggerHaptic(10);
+            closeAllApps();
+            const app = document.getElementById(`app-${id}`);
+            if (app) {
+                app.classList.add('active');
+                updateDockState(id);
+            }
+        }
+
+        function closeApp(id) {
+            triggerHaptic(5);
+            const app = document.getElementById(`app-${id}`);
+            if (app) app.classList.remove('active');
+            updateDockState(null);
+        }
+
+        function closeAllApps() {
+            document.querySelectorAll('.app-screen').forEach(app => app.classList.remove('active'));
+        }
+
+        function goHome() {
+            triggerHaptic(5);
+            closeAllApps();
+            updateDockState(null);
+        }
+
+        function updateDockState(activeApp) {
+            document.querySelectorAll('.dock-btn').forEach(btn => btn.classList.remove('active'));
+            if (!activeApp) {
+                document.querySelector('.dock-btn').classList.add('active'); // Home
+            }
+        }
+
+        /* --- Theme --- */
+        function toggleTheme() {
+            triggerHaptic(20);
+            document.body.classList.toggle('theme-matrix');
+        }
+
+        /* --- Haptic --- */
+        function triggerHaptic(pattern) {
+            if ('vibrate' in navigator) {
+                navigator.vibrate(pattern);
+            }
+        }
+
+        /* --- Clock --- */
+        function updateClock() {
+            const now = new Date();
+            const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            const date = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+            document.getElementById('lockTime').textContent = time;
+            document.getElementById('lockDate').textContent = date;
+            document.getElementById('topClock').textContent = time;
+        }
+
+        /* --- Init --- */
+        updateClock();
+        setInterval(updateClock, 1000);
+        window.onload = runBoot;
+    </script>
+</body>
+</html>

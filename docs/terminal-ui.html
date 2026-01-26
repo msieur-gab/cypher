@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eva OS - Vanilla Edition</title>
+    <style>
+        /* --- Design Tokens --- */
+        :root {
+            --light-gray: #f2f2f2;
+            --black: #000000;
+            
+            /* Theme Defaults (Light) */
+            --bg-color: var(--light-gray);
+            --text-color: var(--black);
+            --border-color: var(--black);
+            --dither-color: var(--black);
+            --dock-bg: rgba(242, 242, 242, 0.4);
+            --dock-border: rgba(0, 0, 0, 0.1);
+            --window-shadow-opacity: 0.8;
+            --desktop-pattern-opacity: 0.15;
+        }
+
+        /* --- Inverted Theme --- */
+        body.dark-mode {
+            --bg-color: var(--black);
+            --text-color: var(--light-gray);
+            --border-color: var(--light-gray);
+            --dither-color: var(--light-gray);
+            --dock-bg: rgba(0, 0, 0, 0.4);
+            --dock-border: rgba(242, 242, 242, 0.2);
+            --window-shadow-opacity: 0.3;
+            --desktop-pattern-opacity: 0.25;
+        }
+
+        /* --- Global Reset & Base --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            transition: background-color 0.5s ease, color 0.5s ease;
+        }
+
+        /* --- Desktop Patterns (CSS Reactive) --- */
+        .desktop-canvas {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: var(--desktop-pattern-opacity);
+            z-index: 0;
+            background-color: transparent;
+        }
+
+        /* Pattern Definitions */
+        body[data-pattern="dither"] .desktop-canvas {
+            background-image: repeating-conic-gradient(var(--text-color) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+        }
+        body[data-pattern="grid"] .desktop-canvas {
+            background-image: radial-gradient(var(--text-color) 0.5px, transparent 0);
+            background-size: 4px 4px;
+        }
+        body[data-pattern="stripes"] .desktop-canvas {
+            background-image: linear-gradient(45deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 6px 6px;
+        }
+        body[data-pattern="coarse"] .desktop-canvas {
+            background-image: repeating-conic-gradient(var(--text-color) 0% 25%, transparent 0% 50%);
+            background-size: 4px 4px;
+        }
+        body[data-pattern="weave"] .desktop-canvas {
+            background-image: 
+                linear-gradient(45deg, var(--text-color) 0.5px, transparent 0.5px),
+                linear-gradient(-45deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 8px 8px;
+        }
+        body[data-pattern="plaid"] .desktop-canvas {
+            background-image: 
+                linear-gradient(var(--text-color) 0.5px, transparent 0.5px),
+                linear-gradient(90deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 10px 10px;
+        }
+        body[data-pattern="fine-grid"] .desktop-canvas {
+            background-image: 
+                linear-gradient(var(--text-color) 0.5px, transparent 0.5px),
+                linear-gradient(90deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 4px 4px;
+        }
+
+        /* --- Dither Shadow Utility --- */
+        .dither-shadow {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            right: -4px;
+            bottom: -4px;
+            pointer-events: none;
+            background-image: repeating-conic-gradient(var(--dither-color) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: var(--window-shadow-opacity);
+            z-index: -1;
+        }
+
+        /* --- Header --- */
+        header {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+            transition: top 0.7s ease-out;
+        }
+
+        header.ready { top: 0; }
+
+        .menu-items { display: flex; gap: 16px; }
+        .menu-items span { cursor: default; padding: 0 8px; }
+        .menu-items span:hover { background: var(--text-color); color: var(--bg-color); }
+
+        /* --- Desktop Icons --- */
+        .desktop-area {
+            position: relative;
+            height: 100%;
+            padding-top: 28px;
+        }
+
+        .icon-grid {
+            position: absolute;
+            top: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            padding: 0 24px;
+        }
+        .icon-grid.right { right: 0; }
+        .icon-grid.left { left: 0; }
+
+        .desktop-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 80px;
+            cursor: default;
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        .icon-visual {
+            padding: 8px;
+            border: 1px solid transparent;
+            transition: background 0.1s;
+        }
+        .desktop-icon:active .icon-visual { background: var(--text-color); color: var(--bg-color); }
+
+        .icon-label-wrap { position: relative; margin-top: 4px; }
+        .icon-label {
+            position: relative;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            white-space: nowrap;
+        }
+
+        /* --- Window System --- */
+        .window {
+            position: absolute;
+            min-width: 250px;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .window-frame {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .title-bar {
+            height: 28px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            cursor: default;
+        }
+
+        .close-btn {
+            width: 28px;
+            height: 100%;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .close-btn:hover { background: var(--text-color); color: var(--bg-color); }
+        .close-box { width: 10px; height: 10px; border: 1px solid currentColor; }
+
+        .title-text {
+            flex: 1;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .window-content {
+            flex: 1;
+            padding: 16px;
+            overflow: auto;
+            font-family: "Georgia", serif;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 12px;
+            height: 12px;
+            cursor: nwse-resize;
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            margin: 2px;
+        }
+
+        /* --- Setup App UI --- */
+        .setup-section { margin-bottom: 20px; }
+        .setup-title { font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+        .pattern-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        
+        .pattern-preview {
+            aspect-ratio: 1;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            position: relative;
+            background-color: var(--bg-color);
+        }
+        
+        /* Mirror desktop patterns in preview */
+        .pattern-preview[data-pattern="dither"] { background-image: repeating-conic-gradient(var(--text-color) 0% 25%, transparent 0% 50%); background-size: 2px 2px; }
+        .pattern-preview[data-pattern="grid"] { background-image: radial-gradient(var(--text-color) 0.5px, transparent 0); background-size: 4px 4px; }
+        .pattern-preview[data-pattern="stripes"] { background-image: linear-gradient(45deg, var(--text-color) 0.5px, transparent 0.5px); background-size: 6px 6px; }
+        .pattern-preview[data-pattern="coarse"] { background-image: repeating-conic-gradient(var(--text-color) 0% 25%, transparent 0% 50%); background-size: 4px 4px; }
+        .pattern-preview[data-pattern="weave"] { background-image: linear-gradient(45deg, var(--text-color) 0.5px, transparent 0.5px), linear-gradient(-45deg, var(--text-color) 0.5px, transparent 0.5px); background-size: 8px 8px; }
+        .pattern-preview[data-pattern="plaid"] { background-image: linear-gradient(var(--text-color) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--text-color) 0.5px, transparent 0.5px); background-size: 10px 10px; }
+        .pattern-preview[data-pattern="fine-grid"] { background-image: linear-gradient(var(--text-color) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--text-color) 0.5px, transparent 0.5px); background-size: 4px 4px; }
+
+        .pattern-preview:hover, .pattern-preview.active { outline: 1px solid var(--text-color); outline-offset: 1px; }
+
+        /* --- Terminal --- */
+        .terminal-box {
+            background: rgba(0,0,0,0.05);
+            font-family: monospace;
+            font-size: 13px;
+            height: 100%;
+            padding: 8px;
+            overflow-y: auto;
+        }
+        .dark-mode .terminal-box { background: rgba(255,255,255,0.1); }
+
+        /* --- Dock --- */
+        footer {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: -100px;
+            z-index: 1000;
+            transition: bottom 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition-delay: 0.3s;
+        }
+        footer.ready { bottom: 24px; }
+
+        .dock {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 16px;
+            border: 1px solid var(--dock-border);
+            background: var(--dock-bg);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            gap: 6px;
+        }
+
+        .dock-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 1px solid var(--dock-border);
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            color: inherit;
+        }
+        .dock-btn:hover { background: rgba(0,0,0,0.05); transform: translateY(-2px); }
+        .dark-mode .dock-btn:hover { background: rgba(255,255,255,0.1); }
+
+        .find-btn {
+            padding: 0 16px;
+            height: 40px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-color);
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 10px;
+        }
+        .find-btn:hover { background: var(--text-color); color: var(--bg-color); }
+
+        .dock-separator {
+            width: 1px;
+            height: 32px;
+            background: var(--dock-border);
+            margin: 0 8px;
+        }
+
+        .indicator {
+            position: absolute;
+            bottom: -6px;
+            width: 3px;
+            height: 3px;
+            background: var(--text-color);
+            border-radius: 50%;
+            display: none;
+        }
+        .is-running .indicator { display: block; }
+    </style>
+</head>
+<body data-pattern="dither">
+    <div class="desktop-canvas" id="desktop-bg"></div>
+
+    <header id="main-header">
+        <div class="menu-items">
+            <span style="display:flex; align-items:center; gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                EVA OS
+            </span>
+            <span>File</span>
+            <span>Special</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:20px;">
+            <button onclick="toggleTheme()" style="background:none; border:none; color:inherit; font-weight:bold; cursor:pointer; padding: 0 10px; border-left: 1px solid var(--dock-border); border-right: 1px solid var(--dock-border);">
+                INVERT
+            </button>
+            <span id="clock" style="font-family:monospace;">00:00 AM</span>
+        </div>
+    </header>
+
+    <main class="desktop-area" id="desktop">
+        <!-- Icons Left -->
+        <div class="icon-grid left">
+            <div class="desktop-icon" onclick="openApp('pref')">
+                <div class="icon-visual"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Setup</div>
+                </div>
+            </div>
+            <div class="desktop-icon" onclick="openApp('print')">
+                <div class="icon-visual"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Printer</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Icons Right -->
+        <div class="icon-grid right">
+            <div class="desktop-icon">
+                <div class="icon-visual"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg></div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Eva HD</div>
+                </div>
+            </div>
+            <div class="desktop-icon" onclick="openApp('write')">
+                <div class="icon-visual"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">EvaWrite</div>
+                </div>
+            </div>
+            <div class="desktop-icon" onclick="openApp('term')">
+                <div class="icon-visual"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">EvaTerm</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer id="main-footer">
+        <div class="dock">
+            <button class="find-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Find
+            </button>
+            <div class="dock-separator"></div>
+            <button class="dock-btn" onclick="openApp('write')" id="dock-write">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <div class="indicator"></div>
+            </button>
+            <button class="dock-btn" onclick="openApp('term')" id="dock-term">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <div class="indicator"></div>
+            </button>
+            <button class="dock-btn" onclick="openApp('pref')" id="dock-pref">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                <div class="indicator"></div>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        /* --- State --- */
+        const apps = {
+            write: { title: 'EvaWrite', content: 'Eva OS Documentation\n\n1. Vanilla HTML/JS Structure.\n2. 1px line ethos.\n3. Reactive Desktop Patterns.\n4. Optimized for theme switching.' },
+            term: { title: 'EvaTerm', isTerminal: true },
+            pref: { title: 'Setup', isSetup: true },
+            print: { title: 'Printer', content: 'Queue: 0 items\nStatus: Online' }
+        };
+        const openWindows = {};
+        let zIndexCounter = 100;
+
+        /* --- Pattern definitions --- */
+        const patterns = [
+            { id: 'dither', label: 'Checker' },
+            { id: 'grid', label: 'Fine Dot' },
+            { id: 'stripes', label: 'Diagonal' },
+            { id: 'coarse', label: 'Coarse' },
+            { id: 'weave', label: 'Weave' },
+            { id: 'plaid', label: 'Plaid' },
+            { id: 'fine-grid', label: 'Fine Grid' },
+            { id: 'none', label: 'Solid' }
+        ];
+
+        /* --- Initialization --- */
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('main-header').classList.add('ready');
+                document.getElementById('main-footer').classList.add('ready');
+            }, 600);
+            updateClock();
+            setInterval(updateClock, 1000);
+        };
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+        }
+
+        function setPattern(id) {
+            document.body.dataset.pattern = id;
+            // Highlight active in setup if open
+            document.querySelectorAll('.pattern-preview').forEach((el) => {
+                el.classList.toggle('active', el.dataset.pattern === id);
+            });
+        }
+
+        /* --- App Management --- */
+        function openApp(id) {
+            if (openWindows[id]) {
+                focusWindow(id);
+                return;
+            }
+
+            const app = apps[id];
+            const win = document.createElement('div');
+            win.className = 'window';
+            win.id = `window-${id}`;
+            win.style.left = (100 + Object.keys(openWindows).length * 40) + 'px';
+            win.style.top = (100 + Object.keys(openWindows).length * 40) + 'px';
+            win.style.width = app.isSetup ? '380px' : '440px';
+            win.style.height = app.isSetup ? '360px' : '320px';
+
+            win.innerHTML = `
+                <div class="dither-shadow"></div>
+                <div class="window-frame">
+                    <div class="title-bar" onmousedown="startDrag(event, '${id}')">
+                        <div class="close-btn" onclick="closeApp('${id}')">
+                            <div class="close-box"></div>
+                        </div>
+                        <div class="title-text">${app.title}</div>
+                        <div style="width:28px"></div>
+                    </div>
+                    <div class="window-content" id="content-${id}">
+                        ${app.isTerminal ? renderTerminal() : app.isSetup ? renderSetup() : `<pre style="white-space:pre-wrap; font-family:inherit;">${app.content}</pre>`}
+                    </div>
+                    <div class="resize-handle" onmousedown="startResize(event, '${id}')"></div>
+                </div>
+            `;
+
+            document.getElementById('desktop').appendChild(win);
+            openWindows[id] = win;
+            document.getElementById(`dock-${id}`)?.classList.add('is-running');
+            focusWindow(id);
+        }
+
+        function closeApp(id) {
+            const win = openWindows[id];
+            if (win) {
+                win.remove();
+                delete openWindows[id];
+                document.getElementById(`dock-${id}`)?.classList.remove('is-running');
+            }
+        }
+
+        function focusWindow(id) {
+            Object.values(openWindows).forEach(w => w.style.zIndex = 40);
+            openWindows[id].style.zIndex = zIndexCounter++;
+        }
+
+        /* --- Custom UI Renderers --- */
+        function renderSetup() {
+            const currentPattern = document.body.dataset.pattern;
+            let patternHTML = patterns.map((p) => `
+                <div class="pattern-preview ${currentPattern === p.id ? 'active' : ''}" 
+                     data-pattern="${p.id}"
+                     onclick="setPattern('${p.id}')" 
+                     title="${p.label}">
+                    <div style="position:absolute; bottom:2px; left:2px; font-size:7px; background:var(--bg-color); border:1px solid var(--border-color); padding:0 2px; pointer-events:none;">${p.label}</div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="setup-section">
+                    <div class="setup-title">Desktop Patterns</div>
+                    <div class="pattern-grid">${patternHTML}</div>
+                </div>
+                <div class="setup-section">
+                    <div class="setup-title">System Info</div>
+                    <div style="font-size:12px; line-height:1.6;">
+                        Eva OS Version: 1.3.2<br>
+                        Engine: Vanilla CSS Reactive<br>
+                        Theme: High Contrast Paper
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTerminal() {
+            return `
+                <div class="terminal-box">
+                    <div>Eva Kernel v1.3.2-LISA</div>
+                    <div>(c) 1983 Eva Corp.</div>
+                    <div style="margin-top:8px;">> help</div>
+                    <div>Available: help, ver, cls, date</div>
+                    <div style="margin-top:8px; display:flex;">
+                        <span style="margin-right:8px;">></span>
+                        <input type="text" id="term-input" style="background:none; border:none; color:inherit; outline:none; font-family:inherit; flex:1;" onkeydown="handleTerminal(event)">
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleTerminal(e) {
+            if (e.key === 'Enter') {
+                const val = e.target.value;
+                const parent = e.target.parentElement;
+                const box = parent.parentElement;
+                const log = document.createElement('div');
+                log.innerText = `> ${val}`;
+                box.insertBefore(log, parent);
+                const res = document.createElement('div');
+                if (val === 'help') res.innerText = 'Available: help, ver, cls, date';
+                else if (val === 'ver') res.innerText = 'Eva OS 1.3.2 (Build 8303)';
+                else if (val === 'date') res.innerText = new Date().toString();
+                else if (val === 'cls') {
+                    [...box.querySelectorAll('div:not(:last-child)')].forEach(n => n.remove());
+                    e.target.value = '';
+                    return;
+                }
+                else res.innerText = `Unknown command: ${val}`;
+                box.insertBefore(res, parent);
+                e.target.value = '';
+                box.scrollTop = box.scrollHeight;
+            }
+        }
+
+        /* --- Window Interaction --- */
+        let activeAction = null;
+        function startDrag(e, id) {
+            if (e.target.closest('.close-btn')) return;
+            focusWindow(id);
+            activeAction = { type: 'drag', id, startX: e.clientX, startY: e.clientY, initialX: openWindows[id].offsetLeft, initialY: openWindows[id].offsetTop };
+            window.addEventListener('mousemove', handleAction);
+            window.addEventListener('mouseup', stopAction);
+        }
+        function startResize(e, id) {
+            e.stopPropagation();
+            focusWindow(id);
+            activeAction = { type: 'resize', id, startX: e.clientX, startY: e.clientY, initialW: openWindows[id].offsetWidth, initialH: openWindows[id].offsetHeight };
+            window.addEventListener('mousemove', handleAction);
+            window.addEventListener('mouseup', stopAction);
+        }
+        function handleAction(e) {
+            if (!activeAction) return;
+            const win = openWindows[activeAction.id];
+            if (activeAction.type === 'drag') {
+                win.style.left = (activeAction.initialX + (e.clientX - activeAction.startX)) + 'px';
+                win.style.top = (activeAction.initialY + (e.clientY - activeAction.startY)) + 'px';
+            } else if (activeAction.type === 'resize') {
+                win.style.width = Math.max(250, activeAction.initialW + (e.clientX - activeAction.startX)) + 'px';
+                win.style.height = Math.max(150, activeAction.initialH + (e.clientY - activeAction.startY)) + 'px';
+            }
+        }
+        function stopAction() {
+            activeAction = null;
+            window.removeEventListener('mousemove', handleAction);
+            window.removeEventListener('mouseup', stopAction);
+        }
+    </script>
+</body>
+</html>

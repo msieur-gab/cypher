@@ -1,0 +1,109 @@
+/**
+ * NEXUS Design Tokens
+ * Lean token system inspired by Suimo
+ * Philosophy: fg/bg + primary accent + spacing
+ */
+
+:root {
+  /* ═══════════════════════════════════════════════════════════
+     COLORS
+     ═══════════════════════════════════════════════════════════ */
+
+  --nx-fg: #ffffff;
+  --nx-fg-dim: #888888;
+  --nx-fg-muted: #555555;
+
+  --nx-bg: #000000;
+  --nx-bg-raised: #111111;
+  --nx-bg-overlay: rgba(0, 0, 0, 0.8);
+
+  --nx-border: #333333;
+
+  /* Primary accent */
+  --nx-primary: #00FFCC;
+  --nx-primary-dim: #00CCAA;
+  --nx-primary-glow: rgba(0, 255, 204, 0.5);
+
+  /* ═══════════════════════════════════════════════════════════
+     SPACING
+     ═══════════════════════════════════════════════════════════ */
+
+  --nx-xs: 0.25rem;
+  --nx-sm: 0.5rem;
+  --nx-md: 1rem;
+  --nx-lg: 1.5rem;
+  --nx-xl: 2rem;
+
+  /* ═══════════════════════════════════════════════════════════
+     BORDERS
+     ═══════════════════════════════════════════════════════════ */
+
+  --nx-thin: 1px;
+  --nx-thick: 2px;
+  --nx-radius: 2px;
+
+  /* ═══════════════════════════════════════════════════════════
+     TYPOGRAPHY
+     ═══════════════════════════════════════════════════════════ */
+
+  --nx-font: 'Courier New', Consolas, monospace;
+  --nx-text-sm: 0.75rem;
+  --nx-text-base: 0.875rem;
+  --nx-text-lg: 1rem;
+
+  /* ═══════════════════════════════════════════════════════════
+     TOUCH & INTERACTION
+     ═══════════════════════════════════════════════════════════ */
+
+  --nx-tap: 32px;
+  --nx-transition: 0.15s ease;
+
+  /* ═══════════════════════════════════════════════════════════
+     EFFECTS
+     ═══════════════════════════════════════════════════════════ */
+
+  --nx-glow: 0 0 10px var(--nx-primary-glow);
+  --nx-glow-lg: 0 0 20px var(--nx-primary-glow);
+
+  /* ═══════════════════════════════════════════════════════════
+     DITHER PATTERNS
+     Usage: background-image: var(--nx-dither); background-size: var(--nx-dither-size);
+     ═══════════════════════════════════════════════════════════ */
+
+  --nx-dither: repeating-conic-gradient(
+    var(--nx-primary) 0% 25%,
+    transparent 0% 50%
+  );
+  --nx-dither-size: 2px 2px;
+
+  /* Dither with custom color (use with --dither-color set locally) */
+  --nx-dither-custom: repeating-conic-gradient(
+    var(--dither-color, var(--nx-primary)) 0% 25%,
+    transparent 0% 50%
+  );
+
+  /* Alternative patterns */
+  --nx-pattern-grid: repeating-linear-gradient(
+    0deg,
+    var(--nx-primary) 0px,
+    var(--nx-primary) 1px,
+    transparent 1px,
+    transparent 4px
+  ),
+  repeating-linear-gradient(
+    90deg,
+    var(--nx-primary) 0px,
+    var(--nx-primary) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  --nx-pattern-grid-size: 4px 4px;
+
+  --nx-pattern-scanlines: repeating-linear-gradient(
+    0deg,
+    var(--nx-primary) 0px,
+    transparent 1px,
+    transparent 2px
+  );
+  --nx-pattern-scanlines-size: 100% 2px;
+}

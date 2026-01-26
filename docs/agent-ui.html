@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Retro Pocket OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;700&display=swap');
+
+        :root {
+            --bg: #ffffff;
+            --fg: #000000;
+            --border: #000000;
+            --card-bg: #ffffff;
+        }
+
+        .dark {
+            --bg: #000000;
+            --fg: #ffffff;
+            --border: #ffffff;
+            --card-bg: #111111;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--fg);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        .retro-text { font-family: 'VT323', monospace; }
+
+        /* --- BOOT & LOCK SCREEN --- */
+        #boot-screen {
+            position: fixed;
+            inset: 0;
+            background: black;
+            color: #00ff00;
+            z-index: 2000;
+            padding: 20px;
+            font-family: 'VT323', monospace;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #lock-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .swipe-track {
+            position: absolute;
+            bottom: 80px;
+            width: 240px;
+            height: 50px;
+            border: 2px solid var(--border);
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            padding: 0 5px;
+            overflow: hidden;
+        }
+
+        .swipe-handle {
+            width: 40px;
+            height: 40px;
+            background: var(--fg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--bg);
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        .swipe-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        /* --- OS UI --- */
+        .app-window {
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            box-shadow: 4px 4px 0px var(--fg);
+        }
+
+        .app-window.active { display: flex; z-index: 50; }
+
+        @media (max-width: 768px) {
+            .app-window.active {
+                position: fixed !important;
+                top: 32px !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: calc(100vh - 112px) !important;
+                box-shadow: none;
+                border-left: none;
+                border-right: none;
+            }
+        }
+
+        .window-header {
+            background: var(--fg);
+            color: var(--bg);
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .crt-filter {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 3000;
+            opacity: 0.3;
+        }
+
+        .dock {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            height: 64px; border-top: 2px solid var(--border);
+            background: var(--bg);
+            display: flex; justify-content: space-around; align-items: center;
+            padding-bottom: env(safe-area-inset-bottom);
+            z-index: 100;
+        }
+
+        .icon-btn {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 2px; cursor: pointer;
+        }
+
+        .btn-pixel {
+            border: 2px solid var(--border);
+            padding: 8px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body class="light">
+    <div class="crt-filter"></div>
+
+    <!-- 1. Boot Sequence -->
+    <div id="boot-screen">
+        <div id="boot-log" class="text-sm"></div>
+    </div>
+
+    <!-- 2. Lock Screen -->
+    <div id="lock-screen">
+        <div class="mb-12">
+            <h1 class="retro-text text-6xl" id="lock-time">12:00</h1>
+            <p class="text-[10px] font-bold uppercase tracking-widest opacity-60">System Ready</p>
+        </div>
+        
+        <div class="swipe-track">
+            <div class="swipe-text">Swipe to Start</div>
+            <div id="handle" class="swipe-handle">
+                <i class="fas fa-chevron-right"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Desktop UI -->
+    <div class="fixed top-0 left-0 w-full h-8 border-b-2 border-black dark:border-white bg-white dark:bg-black z-[110] flex items-center px-4 justify-between text-[10px] font-bold">
+        <div class="flex items-center gap-2"><i class="fas fa-bolt"></i> <span>POCKET_OS V1.0</span></div>
+        <div id="top-clock" class="retro-text text-sm">12:00</div>
+    </div>
+
+    <main class="pt-12 pb-20 h-screen overflow-y-auto">
+        <div class="grid grid-cols-3 gap-6 p-6 max-w-sm mx-auto">
+            <div class="icon-btn" onclick="openApp('projects')">
+                <div class="w-14 h-14 border-2 border-black dark:border-white flex items-center justify-center bg-white dark:bg-black mb-1">
+                    <i class="fas fa-folder"></i>
+                </div>
+                <span class="text-[9px] font-bold uppercase">Work</span>
+            </div>
+            <div class="icon-btn" onclick="openApp('bio')">
+                <div class="w-14 h-14 border-2 border-black dark:border-white flex items-center justify-center bg-white dark:bg-black mb-1">
+                    <i class="fas fa-id-card"></i>
+                </div>
+                <span class="text-[9px] font-bold uppercase">Identity</span>
+            </div>
+            <div class="icon-btn" onclick="toggleTheme()">
+                <div class="w-14 h-14 border-2 border-black dark:border-white flex items-center justify-center bg-white dark:bg-black mb-1">
+                    <i class="fas fa-adjust"></i>
+                </div>
+                <span class="text-[9px] font-bold uppercase">Theme</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- App Windows -->
+    <div id="app-projects" class="app-window" style="top: 60px; left: 40px; width: 350px;">
+        <div class="window-header">
+            <span>Archive_Browser</span>
+            <button onclick="closeApp('projects')">✕</button>
+        </div>
+        <div class="p-4 space-y-3 overflow-y-auto">
+            <div class="border-2 border-black dark:border-white p-3" onclick="triggerHaptic(20)">
+                <h4 class="font-bold text-xs">AX-01 MODULAR WATCH</h4>
+                <p class="text-[10px] opacity-60">Click to view details...</p>
+            </div>
+            <div class="border-2 border-black dark:border-white p-3" onclick="triggerHaptic(20)">
+                <h4 class="font-bold text-xs">VERA AI INTERFACE</h4>
+                <p class="text-[10px] opacity-60">Click to view details...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="dock">
+        <div class="icon-btn" onclick="closeAll()"><i class="fas fa-house"></i><span class="text-[8px]">HOME</span></div>
+        <div class="icon-btn" onclick="openApp('projects')"><i class="fas fa-grid"></i><span class="text-[8px]">WORK</span></div>
+        <div class="icon-btn" onclick="toggleTheme()"><i class="fas fa-moon"></i><span class="text-[8px]">MODE</span></div>
+    </div>
+
+    <script>
+        const bootLog = document.getElementById('boot-log');
+        const bootLines = [
+            "> Initializing POCKET_OS BIOS...",
+            "> CPU: High-Efficiency Logic v2.5",
+            "> Memory Check: 640KB OK",
+            "> Loading kernel modules...",
+            "> Initializing hardware interfaces...",
+            "> HID: Touchscreen controller found",
+            "> HID: Haptic actuator found",
+            "> System ready. Starting shell..."
+        ];
+
+        // 1. Boot Sequence Logic
+        let lineIdx = 0;
+        function typeLine() {
+            if (lineIdx < bootLines.length) {
+                const p = document.createElement('p');
+                p.textContent = bootLines[lineIdx];
+                bootLog.appendChild(p);
+                lineIdx++;
+                setTimeout(typeLine, Math.random() * 200 + 100);
+            } else {
+                setTimeout(() => {
+                    document.getElementById('boot-screen').style.display = 'none';
+                    document.getElementById('lock-screen').style.display = 'flex';
+                }, 500);
+            }
+        }
+
+        // 2. Swipe to Unlock Logic
+        const handle = document.getElementById('handle');
+        const track = document.querySelector('.swipe-track');
+        let startX = 0;
+        let isSwiping = false;
+
+        handle.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+            isSwiping = true;
+            triggerHaptic(10);
+        });
+
+        handle.addEventListener('touchmove', (e) => {
+            if (!isSwiping) return;
+            let deltaX = e.touches[0].clientX - startX;
+            let maxX = track.offsetWidth - handle.offsetWidth - 10;
+            
+            if (deltaX < 0) deltaX = 0;
+            if (deltaX > maxX) deltaX = maxX;
+            
+            handle.style.transform = `translateX(${deltaX}px)`;
+            
+            // Interaction: subtle vibration as you swipe
+            if (Math.floor(deltaX) % 30 === 0) triggerHaptic(5);
+
+            if (deltaX >= maxX) {
+                isSwiping = false;
+                unlock();
+            }
+        });
+
+        handle.addEventListener('touchend', () => {
+            if (!isSwiping) return;
+            isSwiping = false;
+            handle.style.transform = 'translateX(0)';
+        });
+
+        function unlock() {
+            triggerHaptic([30, 50, 30]); // Distinct "Success" buzz
+            document.getElementById('lock-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('lock-screen').style.display = 'none';
+            }, 300);
+        }
+
+        // 3. System Functions
+        function triggerHaptic(pattern) {
+            if ("vibrate" in navigator) {
+                navigator.vibrate(pattern);
+            }
+        }
+
+        let zIndex = 100;
+        function openApp(id) {
+            triggerHaptic(10);
+            const app = document.getElementById(`app-${id}`);
+            app.style.display = 'flex';
+            app.classList.add('active');
+            app.style.zIndex = ++zIndex;
+        }
+
+        function closeApp(id) {
+            triggerHaptic(5);
+            document.getElementById(`app-${id}`).style.display = 'none';
+        }
+
+        function closeAll() {
+            triggerHaptic(5);
+            document.querySelectorAll('.app-window').forEach(app => app.style.display = 'none');
+        }
+
+        function toggleTheme() {
+            triggerHaptic(20);
+            document.body.classList.toggle('dark');
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('lock-time').innerText = timeStr;
+            document.getElementById('top-clock').innerText = timeStr;
+        }
+
+        setInterval(updateClock, 1000);
+        updateClock();
+        window.onload = typeLine;
+    </script>
+</body>
+</html>

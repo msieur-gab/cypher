@@ -1,0 +1,148 @@
+/**
+ * NEXUS Base Styles
+ * Reset and foundational styles
+ */
+
+@import './tokens.css';
+
+/* ═══════════════════════════════════════════════════════════
+   RESET
+   ═══════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--nx-font);
+  font-size: var(--nx-text-base);
+  line-height: 1.6;
+  color: var(--nx-fg);
+  background: var(--nx-bg);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ═══════════════════════════════════════════════════════════ */
+
+h1, h2, h3, h4 {
+  color: var(--nx-primary);
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+h1 {
+  font-size: var(--nx-text-lg);
+  text-shadow: var(--nx-glow);
+}
+
+p {
+  margin: var(--nx-sm) 0;
+  color: var(--nx-fg-dim);
+}
+
+a {
+  color: var(--nx-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+strong {
+  color: var(--nx-primary);
+}
+
+em {
+  color: var(--nx-fg-dim);
+}
+
+code {
+  font-family: var(--nx-font);
+  font-size: var(--nx-text-sm);
+  color: var(--nx-primary);
+  background: var(--nx-bg-raised);
+  padding: var(--nx-xs) var(--nx-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT UTILITIES
+   ═══════════════════════════════════════════════════════════ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-md);
+}
+
+.stack-sm { gap: var(--nx-sm); }
+.stack-lg { gap: var(--nx-lg); }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--nx-md);
+}
+
+.row-between {
+  justify-content: space-between;
+}
+
+.fill {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FOCUS & SELECTION
+   ═══════════════════════════════════════════════════════════ */
+
+:focus-visible {
+  outline: var(--nx-thick) solid var(--nx-primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--nx-primary);
+  color: var(--nx-bg);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLLBAR - Dither pattern
+   ═══════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--nx-bg);
+  border-left: var(--nx-thin) solid var(--nx-border);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--nx-bg);
+  background-image: var(--nx-dither);
+  background-size: var(--nx-dither-size);
+  border: var(--nx-thin) solid var(--nx-primary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--nx-primary);
+  background-image: none;
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--nx-bg);
+}

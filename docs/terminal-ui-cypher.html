@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYPHER Terminal - UI POC</title>
+    <style>
+        /* --- CYPHER Design Tokens --- */
+        :root {
+            /* Text - Grayscale only */
+            --cypher-text-bright: #ffffff;
+            --cypher-text: #aaaaaa;
+            --cypher-text-dim: #888888;
+            --cypher-text-muted: #666666;
+            --cypher-text-faint: #444444;
+            --cypher-text-ghost: #333333;
+
+            /* Backgrounds - Dark shades */
+            --cypher-bg-darkest: #000000;
+            --cypher-bg-dark: #0a0a0a;
+            --cypher-bg: #111111;
+            --cypher-bg-light: #1a1a1a;
+
+            /* Static theme mappings */
+            --bg-color: var(--cypher-bg-darkest);
+            --window-shadow-opacity: 0.6;
+            --desktop-pattern-opacity: 0.15;
+        }
+
+        /* Default Theme (Cyan) */
+        body {
+            --cypher-primary: #00FFCC;
+            --cypher-primary-dim: #00CCAA;
+            --cypher-primary-glow: rgba(0, 255, 204, 0.5);
+            --cypher-primary-subtle: rgba(0, 255, 204, 0.2);
+            --cypher-primary-faint: rgba(0, 255, 204, 0.1);
+            --text-color: #00FFCC;
+            --border-color: #00FFCC;
+            --dither-color: #00FFCC;
+            --dock-bg: rgba(0, 20, 15, 0.8);
+            --dock-border: rgba(0, 255, 204, 0.2);
+        }
+
+        /* Matrix Green Theme */
+        body.theme-matrix {
+            --cypher-primary: #00FF41;
+            --cypher-primary-dim: #00CC33;
+            --cypher-primary-glow: rgba(0, 255, 65, 0.5);
+            --cypher-primary-subtle: rgba(0, 255, 65, 0.2);
+            --cypher-primary-faint: rgba(0, 255, 65, 0.1);
+            --text-color: #00FF41;
+            --border-color: #00FF41;
+            --dither-color: #00FF41;
+            --dock-bg: rgba(0, 15, 5, 0.8);
+            --dock-border: rgba(0, 255, 65, 0.2);
+        }
+
+        /* --- Global Reset & Base --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* --- Desktop Patterns (CSS Reactive) --- */
+        .desktop-canvas {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: var(--desktop-pattern-opacity);
+            z-index: 0;
+            background-color: transparent;
+        }
+
+        /* Pattern Definitions */
+        body[data-pattern="dither"] .desktop-canvas {
+            background-image: repeating-conic-gradient(var(--text-color) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+        }
+        body[data-pattern="grid"] .desktop-canvas {
+            background-image: radial-gradient(var(--text-color) 0.5px, transparent 0);
+            background-size: 4px 4px;
+        }
+        body[data-pattern="scanlines"] .desktop-canvas {
+            background-image: linear-gradient(0deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 100% 2px;
+        }
+        body[data-pattern="matrix"] .desktop-canvas {
+            background-image:
+                linear-gradient(var(--text-color) 0.5px, transparent 0.5px),
+                linear-gradient(90deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 20px 20px;
+        }
+        body[data-pattern="hex"] .desktop-canvas {
+            background-image: radial-gradient(var(--text-color) 1px, transparent 1px);
+            background-size: 16px 16px;
+        }
+
+        /* --- Dither Utilities --- */
+        .dither-shadow {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            right: -4px;
+            bottom: -4px;
+            pointer-events: none;
+            background-image: repeating-conic-gradient(var(--dither-color) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: var(--window-shadow-opacity);
+            z-index: -1;
+        }
+
+        /* Dither hover effect - use instead of solid backgrounds */
+        .dither-hover {
+            position: relative;
+        }
+
+        .dither-hover::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.15s;
+            pointer-events: none;
+        }
+
+        .dither-hover:hover::before {
+            opacity: 0.8;
+        }
+
+        .dither-hover:hover {
+            color: var(--bg-color);
+        }
+
+        /* --- Header --- */
+        header {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            right: 0;
+            height: 32px;
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+            transition: top 0.7s ease-out;
+            text-shadow: 0 0 10px var(--cypher-primary-glow);
+        }
+
+        header.ready { top: 0; }
+
+        .menu-items { display: flex; gap: 16px; }
+        .menu-items span {
+            cursor: default;
+            padding: 4px 12px;
+            letter-spacing: 0.1em;
+            position: relative;
+        }
+
+        .menu-items span::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .menu-items span:hover::before {
+            opacity: 1;
+        }
+
+        .menu-items span:hover {
+            color: var(--bg-color);
+            text-shadow: none;
+        }
+
+        .system-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.2em;
+        }
+
+        /* --- Desktop Icons --- */
+        .desktop-area {
+            position: relative;
+            height: 100%;
+            padding-top: 32px;
+        }
+
+        .icon-grid {
+            position: absolute;
+            top: 50px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            padding: 0 24px;
+        }
+        .icon-grid.right { right: 0; }
+        .icon-grid.left { left: 0; }
+
+        .desktop-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 80px;
+            cursor: default;
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .icon-visual {
+            padding: 8px;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+            color: var(--cypher-primary);
+        }
+        .desktop-icon:hover .icon-visual {
+            border-color: var(--cypher-primary-subtle);
+            box-shadow: 0 0 15px var(--cypher-primary-glow);
+        }
+        .desktop-icon:active .icon-visual {
+            background: var(--text-color);
+            color: var(--bg-color);
+        }
+
+        .icon-label-wrap { position: relative; margin-top: 4px; }
+        .icon-label {
+            position: relative;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            font-size: 9px;
+            font-weight: bold;
+            padding: 2px 8px;
+            white-space: nowrap;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        /* --- Window System --- */
+        .window {
+            position: absolute;
+            min-width: 280px;
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .window-frame {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0 20px var(--cypher-primary-glow);
+        }
+
+        .title-bar {
+            height: 32px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            cursor: default;
+            background: linear-gradient(180deg, var(--cypher-bg-light) 0%, var(--cypher-bg-darkest) 100%);
+        }
+
+        .window-btn {
+            width: 32px;
+            height: 100%;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.1s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .window-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .window-btn:hover::before {
+            opacity: 1;
+        }
+
+        .window-btn:hover {
+            color: var(--bg-color);
+        }
+
+        .close-box {
+            width: 10px;
+            height: 10px;
+            border: 1px solid currentColor;
+        }
+
+        .fullscreen-box {
+            width: 10px;
+            height: 10px;
+            border: 1px solid currentColor;
+            position: relative;
+        }
+
+        .fullscreen-box::after {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            width: 6px;
+            height: 6px;
+            border: 1px solid currentColor;
+            background: var(--cypher-bg-light);
+        }
+
+        .window-btn:hover .fullscreen-box::after {
+            background: var(--cypher-primary);
+        }
+
+        /* Fullscreen window state */
+        .window.fullscreen {
+            position: fixed !important;
+            top: 32px !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: calc(100vh - 32px - 80px) !important;
+            z-index: 999 !important;
+        }
+
+        .window.fullscreen .dither-shadow {
+            display: none;
+        }
+
+        .window.fullscreen .resize-handle {
+            display: none;
+        }
+
+        .title-text {
+            flex: 1;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            text-shadow: 0 0 10px var(--cypher-primary-glow);
+        }
+
+        .window-content {
+            flex: 1;
+            padding: 16px;
+            overflow: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--cypher-text);
+        }
+
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 16px;
+            height: 16px;
+            cursor: nwse-resize;
+            border-right: 2px solid var(--border-color);
+            border-bottom: 2px solid var(--border-color);
+            margin: 2px;
+            opacity: 0.5;
+        }
+        .resize-handle:hover { opacity: 1; }
+
+        /* --- Setup App UI --- */
+        .setup-section { margin-bottom: 20px; }
+        .setup-title {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border-color);
+            letter-spacing: 0.1em;
+            color: var(--cypher-primary);
+        }
+        .pattern-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
+        .pattern-preview {
+            aspect-ratio: 1;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            position: relative;
+            background-color: var(--bg-color);
+            transition: all 0.15s;
+        }
+
+        /* Pattern previews */
+        .pattern-preview[data-pattern="dither"] {
+            background-image: repeating-conic-gradient(var(--text-color) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+        }
+        .pattern-preview[data-pattern="grid"] {
+            background-image: radial-gradient(var(--text-color) 0.5px, transparent 0);
+            background-size: 4px 4px;
+        }
+        .pattern-preview[data-pattern="scanlines"] {
+            background-image: linear-gradient(0deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 100% 2px;
+        }
+        .pattern-preview[data-pattern="matrix"] {
+            background-image: linear-gradient(var(--text-color) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--text-color) 0.5px, transparent 0.5px);
+            background-size: 20px 20px;
+        }
+        .pattern-preview[data-pattern="hex"] {
+            background-image: radial-gradient(var(--text-color) 1px, transparent 1px);
+            background-size: 16px 16px;
+        }
+
+        .pattern-preview:hover {
+            box-shadow: 0 0 10px var(--cypher-primary-glow);
+        }
+        .pattern-preview.active {
+            outline: 2px solid var(--text-color);
+            outline-offset: 2px;
+            box-shadow: 0 0 15px var(--cypher-primary-glow);
+        }
+
+        .pattern-label {
+            position: absolute;
+            bottom: 2px;
+            left: 2px;
+            font-size: 7px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 1px 4px;
+            pointer-events: none;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* --- Terminal --- */
+        .terminal-box {
+            background: var(--cypher-primary-faint);
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            height: 100%;
+            padding: 12px;
+            overflow-y: auto;
+            border: 1px solid var(--cypher-primary-subtle);
+        }
+
+        .terminal-line { margin: 2px 0; }
+        .terminal-line.system { color: var(--cypher-text-dim); }
+        .terminal-line.output { color: var(--cypher-text); }
+        .terminal-line.highlight { color: var(--cypher-primary); }
+        .terminal-line.dim { color: var(--cypher-text-muted); }
+
+        .terminal-input-line {
+            display: flex;
+            margin-top: 8px;
+        }
+        .terminal-prompt {
+            color: var(--cypher-primary);
+            margin-right: 8px;
+        }
+        .terminal-input {
+            background: none;
+            border: none;
+            color: var(--cypher-primary);
+            outline: none;
+            font-family: inherit;
+            font-size: inherit;
+            flex: 1;
+            caret-color: var(--cypher-primary);
+        }
+
+        /* --- Two-Pane File Browser --- */
+        .browser-content {
+            display: flex;
+            height: 100%;
+        }
+
+        .pane-left {
+            width: 220px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .pane-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .pane-header {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--cypher-primary-subtle);
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--cypher-text-dim);
+            background: var(--cypher-bg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pane-header .count {
+            color: var(--cypher-primary);
+        }
+
+        .pane-body {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* File list */
+        .file-list {
+            padding: 4px 0;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.1s;
+            border-left: 2px solid transparent;
+            position: relative;
+        }
+
+        .file-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .file-item:hover::before {
+            opacity: 0.15;
+        }
+
+        .file-item.selected {
+            border-left-color: var(--cypher-primary);
+        }
+
+        .file-item.selected::before {
+            opacity: 0.25;
+        }
+
+        .file-item-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--cypher-primary);
+            font-size: 14px;
+            flex-shrink: 0;
+            opacity: 0.7;
+            position: relative;
+        }
+
+        .file-item:hover .file-item-icon,
+        .file-item.selected .file-item-icon {
+            opacity: 1;
+        }
+
+        .file-item-info {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+        }
+
+        .file-item-name {
+            font-size: 12px;
+            color: var(--cypher-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-item.selected .file-item-name {
+            color: var(--cypher-primary);
+        }
+
+        .file-item-meta {
+            font-size: 9px;
+            color: var(--cypher-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Preview pane */
+        .preview-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--cypher-text-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .preview-content {
+            padding: 16px;
+        }
+
+        .preview-header {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--cypher-primary-subtle);
+        }
+
+        .preview-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--cypher-primary);
+            margin-bottom: 4px;
+            text-shadow: 0 0 10px var(--cypher-primary-glow);
+        }
+
+        .preview-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 10px;
+            color: var(--cypher-text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .preview-classification {
+            padding: 2px 8px;
+            border: 1px solid var(--cypher-primary);
+            font-size: 9px;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+            color: var(--cypher-primary);
+        }
+
+        .preview-classification.secret {
+            background: var(--cypher-primary);
+            color: var(--bg-color);
+        }
+
+        .preview-classification.confidential {
+            background: var(--cypher-primary-subtle);
+        }
+
+        .preview-classification.unclassified {
+            opacity: 0.5;
+        }
+
+        .preview-body {
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--cypher-text);
+        }
+
+        .preview-body p {
+            margin-bottom: 12px;
+        }
+
+        .preview-body .redacted {
+            background: var(--cypher-text-ghost);
+            color: var(--cypher-text-ghost);
+            padding: 0 4px;
+            border-radius: 2px;
+            user-select: none;
+        }
+
+        .preview-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--cypher-primary-subtle);
+        }
+
+        .preview-tag {
+            padding: 4px 10px;
+            border: 1px solid var(--cypher-primary-subtle);
+            font-size: 10px;
+            color: var(--cypher-text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .preview-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .preview-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--cypher-primary);
+            color: var(--cypher-primary);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: color 0.1s, box-shadow 0.15s;
+        }
+
+        .preview-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .preview-btn:hover::before {
+            opacity: 1;
+        }
+
+        .preview-btn:hover {
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--cypher-primary-glow);
+        }
+
+        .preview-btn.primary::before {
+            opacity: 1;
+        }
+
+        .preview-btn.primary {
+            color: var(--bg-color);
+        }
+
+        /* --- Dock --- */
+        footer {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: -100px;
+            z-index: 1000;
+            transition: bottom 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition-delay: 0.3s;
+        }
+        footer.ready { bottom: 24px; }
+
+        .dock {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--dock-border);
+            background: var(--dock-bg);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 30px var(--cypher-primary-faint);
+            gap: 8px;
+        }
+
+        .dock-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            border: 1px solid var(--dock-border);
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            color: var(--cypher-primary);
+            transition: transform 0.15s, box-shadow 0.15s;
+            overflow: hidden;
+        }
+
+        .dock-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .dock-btn:hover::before {
+            opacity: 0.3;
+        }
+
+        .dock-btn:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 15px var(--cypher-primary-glow);
+            border-color: var(--cypher-primary-subtle);
+        }
+
+        .find-btn {
+            padding: 0 20px;
+            height: 44px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--cypher-primary);
+            font-family: inherit;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            letter-spacing: 0.1em;
+            position: relative;
+            overflow: hidden;
+            transition: color 0.1s, box-shadow 0.15s;
+        }
+
+        .find-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .find-btn:hover::before {
+            opacity: 1;
+        }
+
+        .find-btn:hover {
+            color: var(--bg-color);
+            box-shadow: 0 0 20px var(--cypher-primary-glow);
+        }
+
+        .dock-separator {
+            width: 1px;
+            height: 32px;
+            background: var(--dock-border);
+            margin: 0 8px;
+        }
+
+        .indicator {
+            position: absolute;
+            bottom: -8px;
+            width: 4px;
+            height: 4px;
+            background: var(--cypher-primary);
+            border-radius: 50%;
+            display: none;
+            box-shadow: 0 0 8px var(--cypher-primary);
+        }
+        .is-running .indicator { display: block; }
+
+        /* --- Status Bar Info --- */
+        .status-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+        }
+        .status-info .separator {
+            width: 1px;
+            height: 16px;
+            background: var(--dock-border);
+        }
+        #clock {
+            font-family: 'Courier New', monospace;
+        }
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--cypher-primary-subtle);
+            padding: 4px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            opacity: 0.7;
+        }
+        .theme-toggle:hover {
+            opacity: 1;
+            background: var(--cypher-primary-faint);
+        }
+        .theme-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--cypher-primary);
+            box-shadow: 0 0 8px var(--cypher-primary-glow);
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+
+        .fullscreen-toggle {
+            background: none;
+            border: 1px solid var(--cypher-primary-subtle);
+            color: var(--cypher-primary);
+            padding: 4px 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            opacity: 0.7;
+        }
+        .fullscreen-toggle:hover {
+            opacity: 1;
+            background: var(--cypher-primary-faint);
+        }
+
+        /* --- CRT Scanline overlay (optional) --- */
+        .crt-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 9999;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.1) 0px,
+                rgba(0, 0, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+        }
+
+        /* --- Custom Scrollbar --- */
+        .pane-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .pane-body::-webkit-scrollbar-track {
+            background: var(--cypher-bg-darkest);
+        }
+
+        .pane-body::-webkit-scrollbar-thumb {
+            background: var(--cypher-primary-subtle);
+            border-radius: 4px;
+        }
+
+        .pane-body::-webkit-scrollbar-thumb:hover {
+            background: var(--cypher-primary);
+        }
+
+        /* File list focus state */
+        .file-list:focus {
+            outline: none;
+        }
+
+        .file-list:focus .file-item.selected {
+            background: none;
+        }
+
+        .file-list:focus .file-item.selected::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-conic-gradient(var(--cypher-primary) 0% 25%, transparent 0% 50%);
+            background-size: 2px 2px;
+            opacity: 1;
+        }
+
+        .file-list:focus .file-item.selected .file-item-name,
+        .file-list:focus .file-item.selected .file-item-meta,
+        .file-list:focus .file-item.selected .file-item-icon {
+            position: relative;
+            color: var(--bg-color);
+        }
+    </style>
+</head>
+<body data-pattern="scanlines">
+    <div class="desktop-canvas"></div>
+    <!-- <div class="crt-overlay"></div> -->
+
+    <header id="main-header">
+        <div class="menu-items">
+            <span class="system-logo">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                CYPHER
+            </span>
+            <span>File</span>
+            <span>System</span>
+            <span>Help</span>
+        </div>
+        <div class="status-info">
+            <span>AGENT: CONNECTED</span>
+            <div class="separator"></div>
+            <span id="clock">00:00:00</span>
+            <div class="separator"></div>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">
+                <span class="theme-indicator"></span>
+            </button>
+            <button class="fullscreen-toggle" onclick="togglePageFullscreen()" title="Toggle Fullscreen">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="desktop-area" id="desktop">
+        <!-- Icons Left -->
+        <div class="icon-grid left">
+            <div class="desktop-icon" onclick="openApp('pref')" style="animation-delay: 0.1s">
+                <div class="icon-visual">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Config</div>
+                </div>
+            </div>
+            <div class="desktop-icon" onclick="openApp('intel')" style="animation-delay: 0.2s">
+                <div class="icon-visual">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                </div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Intel</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Icons Right -->
+        <div class="icon-grid right">
+            <div class="desktop-icon" style="animation-delay: 0.15s">
+                <div class="icon-visual">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                        <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+                        <path d="M3 12A9 3 0 0 0 21 12"/>
+                    </svg>
+                </div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Database</div>
+                </div>
+            </div>
+            <div class="desktop-icon" onclick="openApp('term')" style="animation-delay: 0.25s">
+                <div class="icon-visual">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <polyline points="4 17 10 11 4 5"/>
+                        <line x1="12" y1="19" x2="20" y2="19"/>
+                    </svg>
+                </div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Terminal</div>
+                </div>
+            </div>
+            <div class="desktop-icon" onclick="openApp('comms')" style="animation-delay: 0.35s">
+                <div class="icon-visual">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                </div>
+                <div class="icon-label-wrap">
+                    <div class="dither-shadow"></div>
+                    <div class="icon-label">Comms</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer id="main-footer">
+        <div class="dock">
+            <button class="find-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                Search
+            </button>
+            <div class="dock-separator"></div>
+            <button class="dock-btn" onclick="openApp('intel')" id="dock-intel">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <div class="indicator"></div>
+            </button>
+            <button class="dock-btn" onclick="openApp('term')" id="dock-term">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polyline points="4 17 10 11 4 5"/>
+                    <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+                <div class="indicator"></div>
+            </button>
+            <button class="dock-btn" onclick="openApp('pref')" id="dock-pref">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <div class="indicator"></div>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        /* --- State --- */
+        const apps = {
+            intel: { title: 'Intel Browser', isFileBrowser: true, width: '700px', height: '450px' },
+            term: { title: 'Terminal', isTerminal: true },
+            pref: { title: 'Configuration', isSetup: true },
+            comms: { title: 'Communications', content: 'SECURE CHANNEL\n\nStatus: Encrypted\nProtocol: P2P-AES256\nLatency: 42ms\n\nNo new messages.' }
+        };
+        const openWindows = {};
+        let zIndexCounter = 100;
+        let selectedFileIndex = 0;
+
+        /* --- Intel Files Data --- */
+        const intelFiles = [
+            {
+                name: 'OPERATION_NEXUS.md',
+                type: 'document',
+                classification: 'secret',
+                date: '2025-03-15',
+                size: '4.2 KB',
+                title: 'Operation Nexus - Mission Brief',
+                content: `<p>Priority mission targeting DataVault Corp's illegal data harvesting operations.</p>
+                <p>Primary objective: Identify and document the scope of unauthorized personal data collection affecting EU citizens.</p>
+                <p>Agent <span class="redacted">████████</span> has confirmed insider access. Extraction window: 72 hours.</p>
+                <p>Secondary objective: Secure evidence for prosecution under GDPR Article 83.</p>`,
+                tags: ['Active', 'Priority-1', 'DataVault']
+            },
+            {
+                name: 'PERSONNEL_CHEN.md',
+                type: 'personnel',
+                classification: 'confidential',
+                date: '2025-03-12',
+                size: '2.8 KB',
+                title: 'Personnel File: Dr. Sarah Chen',
+                content: `<p>Former DataVault Corp lead architect. Turned whistleblower after discovering Project Panopticon.</p>
+                <p>Current status: Under DSU protection program.</p>
+                <p>Expertise: Distributed systems, encryption protocols, data anonymization.</p>
+                <p>Risk assessment: Low. Fully cooperative with investigation.</p>`,
+                tags: ['Whistleblower', 'Protected', 'Technical']
+            },
+            {
+                name: 'INTERCEPT_7734.md',
+                type: 'intercept',
+                classification: 'secret',
+                date: '2025-03-14',
+                size: '1.5 KB',
+                title: 'Intercepted Communication #7734',
+                content: `<p>Source: Internal DataVault Slack channel</p>
+                <p>Timestamp: 2025-03-14 02:34 UTC</p>
+                <p>"The regulators are getting close. Start the <span class="redacted">████████</span> protocol immediately. All EU servers need to be wiped before <span class="redacted">██████</span>."</p>
+                <p>Analysis: Confirms intent to destroy evidence. Accelerated timeline required.</p>`,
+                tags: ['Urgent', 'Evidence', 'Destruction']
+            },
+            {
+                name: 'FACILITY_MAP.md',
+                type: 'document',
+                classification: 'confidential',
+                date: '2025-03-10',
+                size: '8.1 KB',
+                title: 'DataVault Frankfurt Facility',
+                content: `<p>Primary data center location confirmed: Frankfurt Industrial District, Building 7.</p>
+                <p>Security: 24/7 guards, biometric access, internal network air-gapped from public internet.</p>
+                <p>Points of entry: Service entrance (east), ventilation system (roof access), <span class="redacted">████████████</span>.</p>
+                <p>Recommended approach: Social engineering via maintenance contractor cover.</p>`,
+                tags: ['Location', 'Security', 'Frankfurt']
+            },
+            {
+                name: 'DECRYPTED_LOGS.md',
+                type: 'data',
+                classification: 'unclassified',
+                date: '2025-03-13',
+                size: '156 KB',
+                title: 'Decrypted Access Logs',
+                content: `<p>Successfully decrypted server access logs from February 2025.</p>
+                <p>Key findings:</p>
+                <p>• 47 million unique EU citizen records accessed</p>
+                <p>• Data exports to 3 non-EU jurisdictions detected</p>
+                <p>• Automated profiling algorithms running on biometric data</p>
+                <p>Full analysis pending review by legal team.</p>`,
+                tags: ['Evidence', 'Logs', 'GDPR-Violation']
+            },
+            {
+                name: 'CONTACT_RAVEN.md',
+                type: 'personnel',
+                classification: 'secret',
+                date: '2025-03-11',
+                size: '1.2 KB',
+                title: 'Asset: RAVEN',
+                content: `<p>Codename: RAVEN</p>
+                <p>Position: DataVault Corp - Senior Systems Administrator</p>
+                <p>Recruitment date: <span class="redacted">██████████</span></p>
+                <p>Motivation: Financial + ideological</p>
+                <p>Reliability rating: B+</p>
+                <p>Handler: <span class="redacted">████████</span></p>`,
+                tags: ['Asset', 'Inside-Source', 'Active']
+            }
+        ];
+
+        /* --- Pattern definitions --- */
+        const patterns = [
+            { id: 'dither', label: 'Dither' },
+            { id: 'grid', label: 'Dots' },
+            { id: 'scanlines', label: 'Scan' },
+            { id: 'matrix', label: 'Grid' },
+            { id: 'hex', label: 'Hex' },
+            { id: 'none', label: 'None' }
+        ];
+
+        /* --- Initialization --- */
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('main-header').classList.add('ready');
+                document.getElementById('main-footer').classList.add('ready');
+            }, 400);
+            updateClock();
+            setInterval(updateClock, 1000);
+
+            // Open intel browser by default to showcase the list-detail pattern
+            setTimeout(() => openApp('intel'), 600);
+        };
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        }
+
+        function togglePageFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log('Fullscreen error:', err);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('theme-matrix');
+        }
+
+        function setPattern(id) {
+            document.body.dataset.pattern = id;
+            document.querySelectorAll('.pattern-preview').forEach((el) => {
+                el.classList.toggle('active', el.dataset.pattern === id);
+            });
+        }
+
+        /* --- App Management --- */
+        function openApp(id) {
+            if (openWindows[id]) {
+                focusWindow(id);
+                return;
+            }
+
+            const app = apps[id];
+            const win = document.createElement('div');
+            win.className = 'window';
+            win.id = `window-${id}`;
+            win.style.left = (150 + Object.keys(openWindows).length * 30) + 'px';
+            win.style.top = (80 + Object.keys(openWindows).length * 30) + 'px';
+            win.style.width = app.width || (app.isSetup ? '420px' : '500px');
+            win.style.height = app.height || (app.isSetup ? '380px' : '350px');
+
+            // Determine content
+            let content;
+            if (app.isTerminal) {
+                content = renderTerminal();
+            } else if (app.isSetup) {
+                content = renderSetup();
+            } else if (app.isFileBrowser) {
+                content = renderFileBrowser();
+            } else {
+                content = `<pre style="white-space:pre-wrap; font-family:inherit; color: var(--cypher-text); padding: 16px;">${app.content}</pre>`;
+            }
+
+            win.innerHTML = `
+                <div class="dither-shadow"></div>
+                <div class="window-frame">
+                    <div class="title-bar" onmousedown="startDrag(event, '${id}')">
+                        <div class="window-btn" onclick="closeApp('${id}')" title="Close">
+                            <div class="close-box"></div>
+                        </div>
+                        <div class="window-btn" onclick="toggleFullscreen('${id}')" title="Fullscreen">
+                            <div class="fullscreen-box"></div>
+                        </div>
+                        <div class="title-text">${app.title}</div>
+                        <div style="width:64px"></div>
+                    </div>
+                    <div class="window-content" id="content-${id}">
+                        ${content}
+                    </div>
+                    <div class="resize-handle" onmousedown="startResize(event, '${id}')"></div>
+                </div>
+            `;
+
+            document.getElementById('desktop').appendChild(win);
+            openWindows[id] = win;
+            document.getElementById(`dock-${id}`)?.classList.add('is-running');
+            focusWindow(id);
+
+            // Post-render initialization
+            if (app.isFileBrowser) {
+                setTimeout(() => populateFileList(), 0);
+            }
+        }
+
+        function closeApp(id) {
+            const win = openWindows[id];
+            if (win) {
+                win.remove();
+                delete openWindows[id];
+                document.getElementById(`dock-${id}`)?.classList.remove('is-running');
+            }
+        }
+
+        function toggleFullscreen(id) {
+            const win = openWindows[id];
+            if (!win) return;
+
+            if (win.classList.contains('fullscreen')) {
+                // Restore previous position/size
+                win.classList.remove('fullscreen');
+                if (win._savedState) {
+                    win.style.left = win._savedState.left;
+                    win.style.top = win._savedState.top;
+                    win.style.width = win._savedState.width;
+                    win.style.height = win._savedState.height;
+                }
+            } else {
+                // Save current position/size and go fullscreen
+                win._savedState = {
+                    left: win.style.left,
+                    top: win.style.top,
+                    width: win.style.width,
+                    height: win.style.height
+                };
+                win.classList.add('fullscreen');
+            }
+            focusWindow(id);
+        }
+
+        function focusWindow(id) {
+            Object.values(openWindows).forEach(w => w.style.zIndex = 40);
+            openWindows[id].style.zIndex = zIndexCounter++;
+        }
+
+        /* --- Custom UI Renderers --- */
+        function renderSetup() {
+            const currentPattern = document.body.dataset.pattern;
+            let patternHTML = patterns.map((p) => `
+                <div class="pattern-preview ${currentPattern === p.id ? 'active' : ''}"
+                     data-pattern="${p.id}"
+                     onclick="setPattern('${p.id}')">
+                    <div class="pattern-label">${p.label}</div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="setup-section">
+                    <div class="setup-title">Desktop Pattern</div>
+                    <div class="pattern-grid">${patternHTML}</div>
+                </div>
+                <div class="setup-section">
+                    <div class="setup-title">System Info</div>
+                    <div style="font-size: 12px; line-height: 1.8; color: var(--cypher-text-dim);">
+                        CYPHER Terminal v2.1.0<br>
+                        Connection: P2P WebRTC<br>
+                        Encryption: AES-256-GCM<br>
+                        Agent Status: <span style="color: var(--cypher-success);">ONLINE</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTerminal() {
+            return `
+                <div class="terminal-box">
+                    <div class="terminal-line system">CYPHER Terminal v2.1.0</div>
+                    <div class="terminal-line system">(c) 2025 EU Digital Sovereignty Unit</div>
+                    <div class="terminal-line" style="margin-top: 12px;">> help</div>
+                    <div class="terminal-line output">Available commands: ls, cd, cat, download, pwd, help, clear</div>
+                    <div class="terminal-input-line">
+                        <span class="terminal-prompt">></span>
+                        <input type="text" class="terminal-input" id="term-input" onkeydown="handleTerminal(event)" autofocus>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderFileBrowser() {
+            return `
+                <div class="browser-content">
+                    <div class="pane-left">
+                        <div class="pane-header">
+                            <span>Files</span>
+                            <span class="count">${intelFiles.length} items</span>
+                        </div>
+                        <div class="pane-body">
+                            <div class="file-list" id="fileList" tabindex="0"></div>
+                        </div>
+                    </div>
+                    <div class="pane-right">
+                        <div class="pane-header">
+                            <span>Preview</span>
+                        </div>
+                        <div class="pane-body" id="previewPane">
+                            <div class="preview-empty">Select a file to preview</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /* --- File Icons (SVG) --- */
+        const fileIcons = {
+            document: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>`,
+            personnel: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M20 21a8 8 0 1 0-16 0"/>
+            </svg>`,
+            intercept: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 12h4l3-9 6 18 3-9h4"/>
+            </svg>`,
+            data: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M3 5v14a9 3 0 0 0 18 0V5"/>
+                <path d="M3 12a9 3 0 0 0 18 0"/>
+            </svg>`
+        };
+
+        function populateFileList() {
+            const list = document.getElementById('fileList');
+            if (!list) return;
+
+            list.innerHTML = intelFiles.map((file, i) => {
+                const icon = fileIcons[file.type] || fileIcons.document;
+                return `
+                    <div class="file-item ${i === selectedFileIndex ? 'selected' : ''}" data-index="${i}" onclick="selectFile(${i})">
+                        <div class="file-item-icon">${icon}</div>
+                        <div class="file-item-info">
+                            <div class="file-item-name">${file.name}</div>
+                            <div class="file-item-meta">${file.type} • ${file.size}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add keyboard navigation
+            list.addEventListener('keydown', handleFileListKeyboard);
+            list.focus();
+
+            // Show initial preview
+            updateFilePreview();
+        }
+
+        function selectFile(index) {
+            selectedFileIndex = index;
+            document.querySelectorAll('.file-item').forEach((item, i) => {
+                item.classList.toggle('selected', i === index);
+            });
+            updateFilePreview();
+        }
+
+        function updateFilePreview() {
+            const preview = document.getElementById('previewPane');
+            if (!preview) return;
+
+            const file = intelFiles[selectedFileIndex];
+            preview.innerHTML = `
+                <div class="preview-content">
+                    <div class="preview-header">
+                        <div class="preview-title">${file.title}</div>
+                        <div class="preview-meta">
+                            <span class="preview-classification ${file.classification}">${file.classification}</span>
+                            <span>${file.date}</span>
+                            <span>${file.size}</span>
+                        </div>
+                    </div>
+                    <div class="preview-body">
+                        ${file.content}
+                    </div>
+                    <div class="preview-tags">
+                        ${file.tags.map(t => `<span class="preview-tag">${t}</span>`).join('')}
+                    </div>
+                    <div class="preview-actions">
+                        <button class="preview-btn primary">Download</button>
+                        <button class="preview-btn">Export</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleFileListKeyboard(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectFile(Math.min(selectedFileIndex + 1, intelFiles.length - 1));
+                document.querySelector('.file-item.selected')?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectFile(Math.max(selectedFileIndex - 1, 0));
+                document.querySelector('.file-item.selected')?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                // Could trigger download or open action
+                console.log('Open file:', intelFiles[selectedFileIndex].name);
+            }
+        }
+
+        function handleTerminal(e) {
+            if (e.key === 'Enter') {
+                const val = e.target.value.trim();
+                if (!val) return;
+
+                const parent = e.target.parentElement;
+                const box = parent.parentElement;
+
+                // Log command
+                const log = document.createElement('div');
+                log.className = 'terminal-line';
+                log.innerText = `> ${val}`;
+                box.insertBefore(log, parent);
+
+                // Process command
+                const res = document.createElement('div');
+                res.className = 'terminal-line output';
+
+                const cmd = val.toLowerCase().split(' ')[0];
+                switch(cmd) {
+                    case 'help':
+                        res.innerText = 'Available commands: ls, cd, cat, download, pwd, help, clear';
+                        break;
+                    case 'ls':
+                        res.innerHTML = 'intel/  personnel/  operations/  README.md';
+                        res.className = 'terminal-line highlight';
+                        break;
+                    case 'pwd':
+                        res.innerText = '/cypher/data';
+                        break;
+                    case 'clear':
+                        [...box.querySelectorAll('.terminal-line')].forEach(n => n.remove());
+                        e.target.value = '';
+                        return;
+                    default:
+                        res.className = 'terminal-line dim';
+                        res.innerText = `Unknown command: ${val}`;
+                }
+
+                box.insertBefore(res, parent);
+                e.target.value = '';
+                box.scrollTop = box.scrollHeight;
+            }
+        }
+
+        /* --- Window Interaction --- */
+        let activeAction = null;
+
+        function startDrag(e, id) {
+            if (e.target.closest('.close-btn')) return;
+            focusWindow(id);
+            activeAction = {
+                type: 'drag',
+                id,
+                startX: e.clientX,
+                startY: e.clientY,
+                initialX: openWindows[id].offsetLeft,
+                initialY: openWindows[id].offsetTop
+            };
+            window.addEventListener('mousemove', handleAction);
+            window.addEventListener('mouseup', stopAction);
+        }
+
+        function startResize(e, id) {
+            e.stopPropagation();
+            focusWindow(id);
+            activeAction = {
+                type: 'resize',
+                id,
+                startX: e.clientX,
+                startY: e.clientY,
+                initialW: openWindows[id].offsetWidth,
+                initialH: openWindows[id].offsetHeight
+            };
+            window.addEventListener('mousemove', handleAction);
+            window.addEventListener('mouseup', stopAction);
+        }
+
+        function handleAction(e) {
+            if (!activeAction) return;
+            const win = openWindows[activeAction.id];
+            if (activeAction.type === 'drag') {
+                win.style.left = (activeAction.initialX + (e.clientX - activeAction.startX)) + 'px';
+                win.style.top = (activeAction.initialY + (e.clientY - activeAction.startY)) + 'px';
+            } else if (activeAction.type === 'resize') {
+                win.style.width = Math.max(280, activeAction.initialW + (e.clientX - activeAction.startX)) + 'px';
+                win.style.height = Math.max(180, activeAction.initialH + (e.clientY - activeAction.startY)) + 'px';
+            }
+        }
+
+        function stopAction() {
+            activeAction = null;
+            window.removeEventListener('mousemove', handleAction);
+            window.removeEventListener('mouseup', stopAction);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEXUS Terminal - Component Integration</title>
+  <link rel="stylesheet" href="../shared/styles/base.css">
+  <style>
+    /* Desktop layout */
+    .desktop {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Main content area - establishes stacking context to contain windows */
+    .desktop-area {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      z-index: 1; /* Creates stacking context - windows stay within this layer */
+      isolation: isolate; /* Modern way to ensure stacking context isolation */
+    }
+
+    /* Desktop background pattern */
+    .desktop-area::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: var(--desktop-pattern, var(--nx-pattern-scanlines));
+      background-size: var(--desktop-pattern-size, 100% 2px);
+      opacity: 0.15;
+      pointer-events: none;
+    }
+
+    /* Pattern variations */
+    .desktop-area[data-pattern="dither"]::before {
+      background-image: var(--nx-dither);
+      background-size: var(--nx-dither-size);
+    }
+
+    .desktop-area[data-pattern="grid"]::before {
+      background-image: var(--nx-pattern-grid);
+      background-size: var(--nx-pattern-grid-size);
+    }
+
+    .desktop-area[data-pattern="scanlines"]::before {
+      background-image: var(--nx-pattern-scanlines);
+      background-size: var(--nx-pattern-scanlines-size);
+    }
+
+    .desktop-area[data-pattern="matrix"]::before {
+      background-image:
+        linear-gradient(var(--nx-primary) 0.5px, transparent 0.5px),
+        linear-gradient(90deg, var(--nx-primary) 0.5px, transparent 0.5px);
+      background-size: 20px 20px;
+    }
+
+    .desktop-area[data-pattern="hex"]::before {
+      background-image: radial-gradient(var(--nx-primary) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+
+    .desktop-area[data-pattern="none"]::before {
+      background-image: none;
+    }
+
+    /* Desktop icons grid */
+    .icon-grid {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+      padding: 1.5rem;
+      z-index: 1;
+    }
+
+    .icon-grid.left { left: 0; }
+    .icon-grid.right { right: 0; }
+
+    /* Window container layer - fills the desktop area */
+    .window-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      /* No z-index here - windows manage their own stacking within desktop-area's context */
+    }
+
+    .window-layer nexus-window {
+      pointer-events: auto;
+    }
+
+    /* Config/Setup sections */
+    .setup-section {
+      margin-bottom: var(--nx-lg);
+    }
+
+    .setup-title {
+      font-size: var(--nx-text-sm);
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-bottom: var(--nx-md);
+      padding-bottom: var(--nx-xs);
+      border-bottom: var(--nx-thin) solid var(--nx-border);
+      letter-spacing: 0.1em;
+      color: var(--nx-primary);
+    }
+
+    .pattern-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--nx-sm);
+    }
+
+    .pattern-preview {
+      aspect-ratio: 1;
+      border: var(--nx-thin) solid var(--nx-border);
+      cursor: pointer;
+      position: relative;
+      background-color: var(--nx-bg);
+      transition: all 0.15s;
+    }
+
+    .pattern-preview[data-pattern="dither"] {
+      background-image: var(--nx-dither);
+      background-size: var(--nx-dither-size);
+    }
+
+    .pattern-preview[data-pattern="grid"] {
+      background-image: var(--nx-pattern-grid);
+    }
+
+    .pattern-preview[data-pattern="scanlines"] {
+      background-image: var(--nx-pattern-scanlines);
+    }
+
+    .pattern-preview[data-pattern="matrix"] {
+      background-image:
+        linear-gradient(var(--nx-primary) 0.5px, transparent 0.5px),
+        linear-gradient(90deg, var(--nx-primary) 0.5px, transparent 0.5px);
+      background-size: 10px 10px;
+    }
+
+    .pattern-preview[data-pattern="hex"] {
+      background-image: radial-gradient(var(--nx-primary) 1px, transparent 1px);
+      background-size: 8px 8px;
+    }
+
+    .pattern-preview:hover {
+      box-shadow: var(--nx-glow);
+    }
+
+    .pattern-preview.active {
+      outline: 2px solid var(--nx-primary);
+      outline-offset: 2px;
+    }
+
+    .pattern-label {
+      position: absolute;
+      bottom: 2px;
+      left: 2px;
+      font-size: 7px;
+      background: var(--nx-bg);
+      border: var(--nx-thin) solid var(--nx-border);
+      padding: 1px 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--nx-fg-dim);
+    }
+
+    /* Preview pane content */
+    .preview-content {
+      padding: var(--nx-md);
+    }
+
+    .preview-header {
+      margin-bottom: var(--nx-md);
+      padding-bottom: var(--nx-sm);
+      border-bottom: var(--nx-thin) solid var(--nx-border);
+    }
+
+    .preview-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--nx-primary);
+      margin-bottom: var(--nx-xs);
+      text-shadow: var(--nx-glow);
+    }
+
+    .preview-meta {
+      display: flex;
+      gap: var(--nx-md);
+      font-size: 10px;
+      color: var(--nx-fg-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .preview-classification {
+      padding: 2px 8px;
+      border: var(--nx-thin) solid var(--nx-primary);
+      font-size: 9px;
+      font-weight: bold;
+      letter-spacing: 0.1em;
+      color: var(--nx-primary);
+    }
+
+    .preview-classification.secret {
+      background: var(--nx-primary);
+      color: var(--nx-bg);
+    }
+
+    .preview-body {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--nx-fg);
+    }
+
+    .preview-body p {
+      margin-bottom: var(--nx-sm);
+    }
+
+    .preview-body .redacted {
+      background: var(--nx-fg-muted);
+      color: var(--nx-fg-muted);
+      padding: 0 4px;
+      border-radius: 2px;
+      user-select: none;
+    }
+
+    .preview-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--nx-sm);
+      margin-top: var(--nx-md);
+      padding-top: var(--nx-md);
+      border-top: var(--nx-thin) solid var(--nx-border);
+    }
+
+    .preview-tag {
+      padding: 4px 10px;
+      border: var(--nx-thin) solid var(--nx-border);
+      font-size: 10px;
+      color: var(--nx-fg-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .preview-actions {
+      margin-top: var(--nx-lg);
+      display: flex;
+      gap: var(--nx-sm);
+    }
+
+    /* Status in header */
+    .status-text {
+      font-size: var(--nx-text-sm);
+      color: var(--nx-fg-dim);
+      letter-spacing: 0.05em;
+    }
+
+    .status-text.online {
+      color: var(--nx-primary);
+    }
+
+    /* Clock display */
+    #clock {
+      font-family: var(--nx-font);
+      font-size: var(--nx-text-sm);
+      color: var(--nx-fg-dim);
+    }
+
+    /* ========== Entry Animations ========== */
+
+    /* Header: slides down from top */
+    nexus-header {
+      transform: translateY(-100%);
+      opacity: 0;
+      transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+                  opacity 0.4s ease-out;
+    }
+
+    nexus-header.ready {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Dock: slides up from bottom */
+    nexus-dock {
+      transform: translateY(100px);
+      opacity: 0;
+      transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s,
+                  opacity 0.5s ease-out 0.2s;
+    }
+
+    nexus-dock.ready {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Desktop icons: fade in with stagger */
+    nexus-desktop-icon {
+      opacity: 0;
+      transform: scale(0.9);
+      transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+    }
+
+    nexus-desktop-icon.ready {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* ========== CRT Overlay ========== */
+    .crt-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.1) 0px,
+        rgba(0, 0, 0, 0.1) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .crt-overlay.active {
+      opacity: 1;
+    }
+
+    /* CRT toggle button */
+    .crt-toggle {
+      background: none;
+      border: var(--nx-thin) solid var(--nx-primary-dim);
+      color: var(--nx-primary);
+      padding: 4px 8px;
+      font-family: var(--nx-font);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.15s, background 0.15s;
+    }
+
+    .crt-toggle:hover {
+      opacity: 1;
+      background: var(--nx-primary-dim);
+    }
+
+    .crt-toggle.active {
+      background: var(--nx-primary);
+      color: var(--nx-bg);
+      opacity: 1;
+    }
+
+    /* ========== Boot Overlay ========== */
+    .boot-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--nx-bg);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--nx-xl);
+      transition: opacity 0.6s, visibility 0.6s;
+    }
+
+    .boot-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .boot-content {
+      width: 100%;
+      max-width: 540px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    /* Boot lines */
+    .boot-line {
+      opacity: 0;
+      animation: bootFadeIn 0.15s forwards;
+      margin-bottom: 0.25em;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .boot-line.dim { color: var(--nx-fg-dim); }
+    .boot-line.muted { color: var(--nx-fg-muted); }
+    .boot-line.primary { color: var(--nx-primary); }
+    .boot-line.highlight {
+      color: var(--nx-primary);
+      text-shadow: var(--nx-glow);
+      font-size: 16px;
+    }
+    .boot-line.logo {
+      color: var(--nx-primary);
+      text-shadow: var(--nx-glow-lg);
+      font-family: monospace;
+      font-size: 18px;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      margin-bottom: 0;
+      white-space: pre;
+    }
+    .boot-line.header {
+      color: var(--nx-primary);
+      font-weight: bold;
+      margin-top: 1.2em;
+      margin-bottom: 0.4em;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+    }
+    .boot-line.spacer { height: 0.6em; }
+    .boot-line.indent { padding-left: 1.5em; }
+
+    .boot-cursor {
+      display: inline-block;
+      width: 10px;
+      height: 16px;
+      background: var(--nx-primary);
+      animation: bootBlink 0.7s step-end infinite;
+      vertical-align: text-bottom;
+      margin-left: 4px;
+    }
+
+    @keyframes bootFadeIn {
+      to { opacity: 1; }
+    }
+
+    @keyframes bootBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* QR Section */
+    .qr-section {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      margin-top: var(--nx-xl);
+      animation: bootFadeIn 0.5s forwards;
+    }
+
+    .qr-section.active { display: flex; }
+
+    .qr-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--nx-fg-dim);
+      margin-bottom: var(--nx-md);
+    }
+
+    .qr-wrapper {
+      padding: var(--nx-md);
+      border: var(--nx-thin) solid var(--nx-primary);
+      background: var(--nx-bg);
+      box-shadow: var(--nx-glow-lg);
+      margin-bottom: var(--nx-lg);
+    }
+
+    .qr-instructions {
+      font-size: 13px;
+      color: var(--nx-fg-dim);
+      max-width: 340px;
+      line-height: 1.6;
+    }
+
+    .qr-instructions strong {
+      color: var(--nx-primary);
+    }
+
+    .waiting-indicator {
+      display: flex;
+      align-items: center;
+      gap: var(--nx-sm);
+      margin-top: var(--nx-lg);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--nx-fg-muted);
+    }
+
+    .waiting-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--nx-primary);
+      animation: waitPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes waitPulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+
+    /* Skip button */
+    .skip-btn {
+      position: fixed;
+      bottom: var(--nx-lg);
+      right: var(--nx-lg);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--nx-fg-muted);
+      cursor: pointer;
+      padding: var(--nx-sm) var(--nx-md);
+      border: var(--nx-thin) solid var(--nx-border);
+      transition: all 0.15s;
+      z-index: 10001;
+      background: var(--nx-bg);
+    }
+
+    .skip-btn:hover {
+      color: var(--nx-primary);
+      border-color: var(--nx-primary);
+    }
+
+    .skip-btn.hidden { display: none; }
+
+    /* Session info */
+    .session-info {
+      position: fixed;
+      bottom: var(--nx-lg);
+      left: var(--nx-lg);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--nx-fg-muted);
+    }
+  </style>
+</head>
+<body>
+  <!-- Boot Overlay -->
+  <div class="boot-overlay" id="boot-overlay">
+    <div class="boot-content" id="boot-content">
+      <div id="boot-log"></div>
+
+      <div class="qr-section" id="qr-section">
+        <div class="qr-label">Agent Authentication Required</div>
+        <div class="qr-wrapper">
+          <nexus-qrcode id="session-qr" size="180"></nexus-qrcode>
+        </div>
+        <p class="qr-instructions">
+          Open <strong>NEXUS Agent</strong> on your mobile device and scan this code to establish a secure connection.
+        </p>
+        <div class="waiting-indicator">
+          <div class="waiting-dot"></div>
+          <span>Awaiting agent connection</span>
+        </div>
+        <nexus-button variant="ghost" style="margin-top: var(--nx-lg);" onclick="simulateConnect()">
+          Simulate Connection
+        </nexus-button>
+      </div>
+    </div>
+
+    <div class="session-info" id="session-info">Session: --</div>
+    <div class="skip-btn" id="skip-btn" onclick="skipBoot()">Skip</div>
+  </div>
+
+  <!-- CRT Scanline Overlay -->
+  <div class="crt-overlay" id="crt-overlay"></div>
+
+  <div class="desktop">
+    <!-- Header -->
+    <nexus-header title="NEXUS" id="main-header">
+      <span slot="menu" class="menu-item">File</span>
+      <span slot="menu" class="menu-item">System</span>
+      <span slot="menu" class="menu-item">Help</span>
+      <div slot="status" style="display: flex; align-items: center; gap: var(--nx-md);">
+        <span class="status-text online">AGENT: CONNECTED</span>
+        <span id="clock">00:00:00</span>
+        <button class="crt-toggle" id="crt-toggle" onclick="toggleCRT()">CRT</button>
+        <nexus-button variant="ghost" icon="fullscreen" icon-only onclick="toggleFullscreen()"></nexus-button>
+      </div>
+    </nexus-header>
+
+    <!-- Desktop area with icons and windows -->
+    <main class="desktop-area" id="desktop" data-pattern="scanlines">
+      <!-- Left icons -->
+      <nav class="icon-grid left" aria-label="Desktop shortcuts">
+        <nexus-desktop-icon id="icon-config" icon="settings" label="Config"></nexus-desktop-icon>
+        <nexus-desktop-icon id="icon-intel" icon="fileText" label="Intel"></nexus-desktop-icon>
+      </nav>
+
+      <!-- Right icons -->
+      <nav class="icon-grid right" aria-label="Desktop shortcuts">
+        <nexus-desktop-icon icon="database" label="Database" disabled></nexus-desktop-icon>
+        <nexus-desktop-icon id="icon-terminal" icon="terminal" label="Terminal"></nexus-desktop-icon>
+        <nexus-desktop-icon id="icon-comms" icon="phone" label="Comms"></nexus-desktop-icon>
+      </nav>
+
+      <!-- Window layer -->
+      <div class="window-layer" id="window-layer"></div>
+    </main>
+
+    <!-- Dock -->
+    <nexus-dock position="float" id="main-dock">
+      <nexus-dock-item slot="start" label="Search">
+        <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </nexus-dock-item>
+
+      <nexus-dock-item id="dock-intel" label="Intel" onclick="openApp('intel')">
+        <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+      </nexus-dock-item>
+
+      <nexus-dock-item id="dock-terminal" label="Terminal" onclick="openApp('terminal')">
+        <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="4 17 10 11 4 5"/>
+          <line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+      </nexus-dock-item>
+
+      <nexus-dock-item id="dock-comms" label="Comms" onclick="openApp('comms')">
+        <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+      </nexus-dock-item>
+
+      <nexus-dock-item slot="end" id="dock-config" label="Config" onclick="openApp('config')">
+        <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </nexus-dock-item>
+    </nexus-dock>
+  </div>
+
+  <script type="module">
+    // Import all NEXUS components
+    import '../shared/components/nexus-button.js';
+    import '../shared/components/nexus-header.js';
+    import '../shared/components/nexus-dock.js';
+    import '../shared/components/nexus-window.js';
+    import '../shared/components/nexus-file-browser.js';
+    import '../shared/components/nexus-list.js';
+    import '../shared/components/nexus-list-item.js';
+    import '../shared/components/nexus-input.js';
+    import '../shared/components/nexus-desktop-icon.js';
+    import '../shared/components/nexus-terminal.js';
+    import '../shared/components/nexus-toast.js';
+    import '../shared/components/nexus-qrcode.js';
+
+    // ========== Boot Sequence ==========
+    const bootOverlay = document.getElementById('boot-overlay');
+    const bootLog = document.getElementById('boot-log');
+    const bootContent = document.getElementById('boot-content');
+    const qrSection = document.getElementById('qr-section');
+    const skipBtn = document.getElementById('skip-btn');
+
+    // Generate session ID
+    const sessionId = 'NX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    document.getElementById('session-info').textContent = 'Session: ' + sessionId;
+
+    // Boot narrative
+    const bootSequence = [
+      // ASCII Logo
+      { text: '███╗   ██╗███████╗██╗  ██╗██╗   ██╗███████╗', cls: 'logo', delay: 40 },
+      { text: '████╗  ██║██╔════╝╚██╗██╔╝██║   ██║██╔════╝', cls: 'logo', delay: 40 },
+      { text: '██╔██╗ ██║█████╗   ╚███╔╝ ██║   ██║███████╗', cls: 'logo', delay: 40 },
+      { text: '██║╚██╗██║██╔══╝   ██╔██╗ ██║   ██║╚════██║', cls: 'logo', delay: 40 },
+      { text: '██║ ╚████║███████╗██╔╝ ██╗╚██████╔╝███████║', cls: 'logo', delay: 40 },
+      { text: '╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝', cls: 'logo', delay: 40 },
+      { text: '', cls: 'spacer', delay: 400 },
+      { text: '> TERMINAL v2.1.0', cls: 'dim', delay: 300 },
+      { text: '> Establishing secure environment...', cls: 'dim', delay: 250 },
+      { text: '', cls: 'spacer', delay: 200 },
+
+      { text: '[ BRIEFING ]', cls: 'header', delay: 350 },
+      { text: 'Welcome, Operative.', cls: '', delay: 250 },
+      { text: '', cls: 'spacer', delay: 100 },
+      { text: 'You are accessing the NEXUS network — a decentralized', cls: '', delay: 50 },
+      { text: 'intelligence system designed for one purpose:', cls: '', delay: 50 },
+      { text: 'to help you understand and protect your digital identity.', cls: 'primary', delay: 350 },
+      { text: '', cls: 'spacer', delay: 150 },
+
+      { text: '[ ARCHITECTURE ]', cls: 'header', delay: 400 },
+      { text: 'This terminal is a "dumb" display — it holds no secrets.', cls: '', delay: 60 },
+      { text: 'Your mobile device is your VAULT:', cls: '', delay: 60 },
+      { text: '• Stores all credentials and keys', cls: 'indent dim', delay: 50 },
+      { text: '• Holds downloaded intelligence', cls: 'indent dim', delay: 50 },
+      { text: '• Never transmits data to servers', cls: 'indent dim', delay: 50 },
+      { text: '', cls: 'spacer', delay: 100 },
+      { text: 'Communication happens peer-to-peer. No middleman.', cls: 'primary', delay: 350 },
+      { text: '', cls: 'spacer', delay: 150 },
+
+      { text: '[ MISSION ]', cls: 'header', delay: 400 },
+      { text: 'Investigate how your personal data flows through', cls: '', delay: 60 },
+      { text: 'the digital world. You will:', cls: '', delay: 60 },
+      { text: '• Intercept and decrypt intelligence files', cls: 'indent dim', delay: 50 },
+      { text: '• Uncover connections between data points', cls: 'indent dim', delay: 50 },
+      { text: '• Learn to protect your digital sovereignty', cls: 'indent dim', delay: 50 },
+      { text: '', cls: 'spacer', delay: 150 },
+
+      { text: '[ CONNECT ]', cls: 'header', delay: 400 },
+      { text: 'To begin, authenticate with your mobile agent.', cls: '', delay: 60 },
+      { text: 'Scan the QR code to establish a secure channel.', cls: 'primary', delay: 500 },
+    ];
+
+    let bootIndex = 0;
+    let cursor = null;
+    let isBooting = true;
+
+    function runBootSequence() {
+      if (!isBooting) return;
+      if (cursor) cursor.remove();
+
+      if (bootIndex >= bootSequence.length) {
+        showQRSection();
+        return;
+      }
+
+      const item = bootSequence[bootIndex];
+      const div = document.createElement('div');
+      div.className = 'boot-line' + (item.cls ? ' ' + item.cls : '');
+
+      if (item.text) {
+        div.textContent = item.text;
+        cursor = document.createElement('span');
+        cursor.className = 'boot-cursor';
+        div.appendChild(cursor);
+      }
+
+      bootLog.appendChild(div);
+      bootContent.scrollTop = bootContent.scrollHeight;
+      bootIndex++;
+
+      setTimeout(runBootSequence, item.delay || 80);
+    }
+
+    function showQRSection() {
+      if (cursor) cursor.remove();
+      skipBtn.classList.add('hidden');
+      qrSection.classList.add('active');
+
+      // Set QR data
+      const qr = document.getElementById('session-qr');
+      if (qr) qr.data = `nexus://connect/${sessionId}`;
+    }
+
+    window.skipBoot = function() {
+      isBooting = false;
+      bootLog.innerHTML = '';
+      showQRSection();
+    };
+
+    window.simulateConnect = function() {
+      document.getElementById('session-info').innerHTML =
+        'Session: ' + sessionId + ' <span style="color: var(--nx-primary);">CONNECTED</span>';
+
+      setTimeout(() => {
+        bootOverlay.classList.add('hidden');
+        runEntryAnimations();
+      }, 600);
+    };
+
+    // Start boot after brief delay
+    setTimeout(runBootSequence, 600);
+
+    // App definitions
+    const apps = {
+      intel: {
+        title: 'Intel Browser',
+        width: 700,
+        height: 450,
+        render: renderIntelBrowser
+      },
+      terminal: {
+        title: 'Terminal',
+        width: 500,
+        height: 350,
+        render: renderTerminal
+      },
+      config: {
+        title: 'Configuration',
+        width: 420,
+        height: 420,
+        render: renderConfig
+      },
+      comms: {
+        title: 'Communications',
+        width: 450,
+        height: 300,
+        render: renderComms
+      }
+    };
+
+    // Intel files data
+    const intelFiles = [
+      {
+        name: 'OPERATION_NEXUS.md',
+        type: 'document',
+        classification: 'secret',
+        size: '4.2 KB',
+        title: 'Operation Nexus - Mission Brief',
+        content: `<p>Priority mission targeting DataVault Corp's illegal data harvesting operations.</p>
+          <p>Primary objective: Identify and document the scope of unauthorized personal data collection affecting EU citizens.</p>
+          <p>Agent <span class="redacted">████████</span> has confirmed insider access. Extraction window: 72 hours.</p>`,
+        tags: ['Active', 'Priority-1', 'DataVault']
+      },
+      {
+        name: 'PERSONNEL_CHEN.md',
+        type: 'personnel',
+        classification: 'confidential',
+        size: '2.8 KB',
+        title: 'Personnel File: Dr. Sarah Chen',
+        content: `<p>Former DataVault Corp lead architect. Turned whistleblower after discovering Project Panopticon.</p>
+          <p>Current status: Under DSU protection program.</p>
+          <p>Expertise: Distributed systems, encryption protocols, data anonymization.</p>`,
+        tags: ['Whistleblower', 'Protected', 'Technical']
+      },
+      {
+        name: 'INTERCEPT_7734.md',
+        type: 'intercept',
+        classification: 'secret',
+        size: '1.5 KB',
+        title: 'Intercepted Communication #7734',
+        content: `<p>Source: Internal DataVault Slack channel</p>
+          <p>Timestamp: 2025-03-14 02:34 UTC</p>
+          <p>"The regulators are getting close. Start the <span class="redacted">████████</span> protocol immediately."</p>`,
+        tags: ['Urgent', 'Evidence', 'Destruction']
+      },
+      {
+        name: 'FACILITY_MAP.md',
+        type: 'document',
+        classification: 'confidential',
+        size: '8.1 KB',
+        title: 'DataVault Frankfurt Facility',
+        content: `<p>Primary data center location confirmed: Frankfurt Industrial District, Building 7.</p>
+          <p>Security: 24/7 guards, biometric access, internal network air-gapped.</p>`,
+        tags: ['Location', 'Security', 'Frankfurt']
+      },
+      {
+        name: 'DECRYPTED_LOGS.md',
+        type: 'data',
+        classification: 'unclassified',
+        size: '156 KB',
+        title: 'Decrypted Access Logs',
+        content: `<p>Successfully decrypted server access logs from February 2025.</p>
+          <p>Key findings: 47 million unique EU citizen records accessed.</p>`,
+        tags: ['Evidence', 'Logs', 'GDPR-Violation']
+      },
+      {
+        name: 'CONTACT_RAVEN.md',
+        type: 'personnel',
+        classification: 'secret',
+        size: '1.2 KB',
+        title: 'Asset: RAVEN',
+        content: `<p>Codename: RAVEN</p>
+          <p>Position: DataVault Corp - Senior Systems Administrator</p>
+          <p>Recruitment date: <span class="redacted">██████████</span></p>
+          <p>Motivation: Financial + ideological</p>
+          <p>Reliability rating: B+</p>
+          <p>Handler: <span class="redacted">████████</span></p>`,
+        tags: ['Asset', 'Inside-Source', 'Active']
+      }
+    ];
+
+    // State
+    const openWindows = {};
+    let zIndexCounter = 100;
+    let windowOffset = 0;
+
+    // Clock update
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').textContent = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // Fullscreen toggle
+    window.toggleFullscreen = function() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(console.error);
+      } else {
+        document.exitFullscreen();
+      }
+    };
+
+    // Open app window
+    window.openApp = function(id) {
+      if (openWindows[id]) {
+        focusWindow(id);
+        return;
+      }
+
+      const app = apps[id];
+      if (!app) return;
+
+      const layer = document.getElementById('window-layer');
+      const win = document.createElement('nexus-window');
+
+      win.id = `window-${id}`;
+      win.title = app.title;
+      win.width = app.width;
+      win.height = app.height;
+      win.x = 150 + windowOffset * 30;
+      win.y = 80 + windowOffset * 30;
+      windowOffset = (windowOffset + 1) % 5;
+
+      // Render content
+      win.innerHTML = app.render();
+
+      // Event handlers
+      win.addEventListener('close', () => closeApp(id));
+      win.addEventListener('focus-window', () => focusWindow(id));
+
+      layer.appendChild(win);
+      openWindows[id] = win;
+
+      // Mark dock item active
+      document.getElementById(`dock-${id}`)?.setAttribute('active', '');
+
+      focusWindow(id);
+
+      // Post-render setup
+      if (id === 'intel') {
+        setupIntelBrowser(win);
+      } else if (id === 'terminal') {
+        setupTerminal(win);
+      }
+    };
+
+    function closeApp(id) {
+      const win = openWindows[id];
+      if (win) {
+        win.remove();
+        delete openWindows[id];
+        document.getElementById(`dock-${id}`)?.removeAttribute('active');
+      }
+    }
+
+    function focusWindow(id) {
+      Object.values(openWindows).forEach(w => w.style.zIndex = 40);
+      if (openWindows[id]) {
+        openWindows[id].style.zIndex = ++zIndexCounter;
+      }
+    }
+
+    // Render functions
+    function renderIntelBrowser() {
+      return `
+        <nexus-file-browser list-width="220px" style="height: 100%;">
+          <span slot="list-header">Files <span class="count">(${intelFiles.length})</span></span>
+          <nexus-list slot="list" id="intel-list">
+            ${intelFiles.map((f, i) => `
+              <nexus-list-item
+                icon="file"
+                label="${f.name}"
+                meta="${f.type} - ${f.size}"
+                data-index="${i}"
+              ></nexus-list-item>
+            `).join('')}
+          </nexus-list>
+          <span slot="detail-header">Preview</span>
+          <div slot="detail" id="intel-preview">
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--nx-fg-muted);">
+              Select a file to preview
+            </div>
+          </div>
+        </nexus-file-browser>
+      `;
+    }
+
+    function setupIntelBrowser(win) {
+      const list = win.querySelector('#intel-list');
+      const preview = win.querySelector('#intel-preview');
+
+      list?.addEventListener('selection-change', (e) => {
+        const index = e.detail.index;
+        if (index >= 0 && index < intelFiles.length) {
+          const file = intelFiles[index];
+          preview.innerHTML = `
+            <div class="preview-content">
+              <div class="preview-header">
+                <div class="preview-title">${file.title}</div>
+                <div class="preview-meta">
+                  <span class="preview-classification ${file.classification}">${file.classification}</span>
+                  <span>${file.size}</span>
+                </div>
+              </div>
+              <div class="preview-body">${file.content}</div>
+              <div class="preview-tags">
+                ${file.tags.map(t => `<span class="preview-tag">${t}</span>`).join('')}
+              </div>
+              <div class="preview-actions">
+                <nexus-button>Download</nexus-button>
+                <nexus-button variant="secondary">Export</nexus-button>
+              </div>
+            </div>
+          `;
+        }
+      });
+    }
+
+    function renderTerminal() {
+      return `
+        <nexus-terminal
+          id="app-terminal"
+          prompt=">"
+          greeting="NEXUS Terminal v2.1.0&#10;(c) 2025 EU Digital Sovereignty Unit&#10;&#10;Type 'help' for available commands."
+        ></nexus-terminal>
+      `;
+    }
+
+    function setupTerminal(win) {
+      const terminal = win.querySelector('#app-terminal');
+      terminal?.addEventListener('command', (e) => {
+        const { command, terminal: term } = e.detail;
+        const cmd = command.toLowerCase().split(' ')[0];
+
+        switch(cmd) {
+          case 'help':
+            term.addLine('Available commands: ls, cd, cat, download, pwd, help, clear', 'output');
+            e.preventDefault();
+            break;
+          case 'ls':
+            term.addLine('intel/  personnel/  operations/  README.md', 'output');
+            e.preventDefault();
+            break;
+          case 'pwd':
+            term.addLine('/nexus/data', 'output');
+            e.preventDefault();
+            break;
+          case 'clear':
+            term.clear();
+            e.preventDefault();
+            break;
+          case 'cd':
+            term.addLine(`Changed directory to ${command.split(' ')[1] || '/'}`, 'output');
+            e.preventDefault();
+            break;
+          case 'cat':
+            const file = command.split(' ')[1];
+            if (file) {
+              term.addLine(`Contents of ${file}:`, 'output');
+              term.addLine('[File content would be displayed here]', 'dim');
+            } else {
+              term.addLine('Usage: cat <filename>', 'error');
+            }
+            e.preventDefault();
+            break;
+        }
+      });
+    }
+
+    function renderComms() {
+      return `
+        <div style="padding: var(--nx-md); font-family: var(--nx-font);">
+          <div style="text-align: center; margin-bottom: var(--nx-lg);">
+            <div style="font-size: 14px; font-weight: bold; color: var(--nx-primary); text-shadow: var(--nx-glow); margin-bottom: var(--nx-sm);">
+              SECURE CHANNEL
+            </div>
+            <div style="font-size: 11px; color: var(--nx-fg-dim);">End-to-End Encrypted</div>
+          </div>
+          <div style="background: var(--nx-bg-raised); border: var(--nx-thin) solid var(--nx-border); padding: var(--nx-md); margin-bottom: var(--nx-md);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: var(--nx-sm); font-size: 11px;">
+              <span style="color: var(--nx-fg-dim);">Status:</span>
+              <span style="color: var(--nx-primary);">ENCRYPTED</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: var(--nx-sm); font-size: 11px;">
+              <span style="color: var(--nx-fg-dim);">Protocol:</span>
+              <span style="color: var(--nx-fg);">P2P-AES256</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: var(--nx-sm); font-size: 11px;">
+              <span style="color: var(--nx-fg-dim);">Latency:</span>
+              <span style="color: var(--nx-fg);">42ms</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+              <span style="color: var(--nx-fg-dim);">Signal:</span>
+              <span style="color: var(--nx-primary);">STRONG</span>
+            </div>
+          </div>
+          <div style="text-align: center; color: var(--nx-fg-muted); font-size: 12px; padding: var(--nx-md);">
+            No new messages.
+          </div>
+        </div>
+      `;
+    }
+
+    function renderConfig() {
+      return `
+        <div style="padding: var(--nx-md);">
+          <div class="setup-section">
+            <div class="setup-title">Desktop Pattern</div>
+            <div class="pattern-grid" style="grid-template-columns: repeat(3, 1fr);">
+              <div class="pattern-preview" data-pattern="dither" onclick="setPattern('dither')">
+                <div class="pattern-label">Dither</div>
+              </div>
+              <div class="pattern-preview" data-pattern="grid" onclick="setPattern('grid')">
+                <div class="pattern-label">Dots</div>
+              </div>
+              <div class="pattern-preview active" data-pattern="scanlines" onclick="setPattern('scanlines')">
+                <div class="pattern-label">Scan</div>
+              </div>
+              <div class="pattern-preview" data-pattern="matrix" onclick="setPattern('matrix')">
+                <div class="pattern-label">Matrix</div>
+              </div>
+              <div class="pattern-preview" data-pattern="hex" onclick="setPattern('hex')">
+                <div class="pattern-label">Hex</div>
+              </div>
+              <div class="pattern-preview" data-pattern="none" onclick="setPattern('none')">
+                <div class="pattern-label">None</div>
+              </div>
+            </div>
+          </div>
+          <div class="setup-section">
+            <div class="setup-title">System Info</div>
+            <div style="font-size: 12px; line-height: 1.8; color: var(--nx-fg-dim);">
+              NEXUS Terminal v2.1.0<br>
+              Connection: P2P WebRTC<br>
+              Encryption: AES-256-GCM<br>
+              Agent Status: <span style="color: var(--nx-primary);">ONLINE</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    window.setPattern = function(id) {
+      const desktop = document.querySelector('.desktop-area');
+      desktop.dataset.pattern = id;
+
+      // Update active state in config window
+      document.querySelectorAll('.pattern-preview').forEach((el) => {
+        el.classList.toggle('active', el.dataset.pattern === id);
+      });
+    };
+
+    // CRT overlay toggle
+    window.toggleCRT = function() {
+      const overlay = document.getElementById('crt-overlay');
+      const btn = document.getElementById('crt-toggle');
+      overlay.classList.toggle('active');
+      btn.classList.toggle('active');
+    };
+
+    // Desktop icon event listeners
+    document.getElementById('icon-config')?.addEventListener('icon-open', () => openApp('config'));
+    document.getElementById('icon-intel')?.addEventListener('icon-open', () => openApp('intel'));
+    document.getElementById('icon-terminal')?.addEventListener('icon-open', () => openApp('terminal'));
+    document.getElementById('icon-comms')?.addEventListener('icon-open', () => openApp('comms'));
+
+    // ========== Entry Animations ==========
+    function runEntryAnimations() {
+      // Header slides down
+      setTimeout(() => {
+        document.getElementById('main-header')?.classList.add('ready');
+      }, 100);
+
+      // Dock slides up
+      setTimeout(() => {
+        document.getElementById('main-dock')?.classList.add('ready');
+      }, 200);
+
+      // Desktop icons fade in with stagger
+      const icons = document.querySelectorAll('nexus-desktop-icon');
+      icons.forEach((icon, i) => {
+        setTimeout(() => {
+          icon.classList.add('ready');
+        }, 300 + i * 100);
+      });
+
+      // Open intel browser after animations
+      setTimeout(() => openApp('intel'), 800);
+    }
+
+    // Entry animations run after boot completes (called by simulateConnect)
+  </script>
+</body>
+</html>

@@ -18,6 +18,7 @@ import '../../shared/components/nexus-toast.js';
 import '../../shared/components/nexus-status-badge.js';
 import '../../shared/components/nexus-desktop-icon.js';
 import '../../shared/components/nexus-dock.js';
+import { requestWakeLock, releaseWakeLock } from './utils/wakelock.js';
 
 export class AgentApp extends LitElement {
   static properties = {
@@ -544,6 +545,7 @@ export class AgentApp extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    releaseWakeLock();
     if (this._clockInterval) clearInterval(this._clockInterval);
     this.peerService.destroy();
   }
@@ -679,6 +681,7 @@ export class AgentApp extends LitElement {
     this._bootCursor = false;
     await this._delay(600);
     this.screen = 'main';
+    requestWakeLock();
 
     // Load downloads
     try {
@@ -705,6 +708,7 @@ export class AgentApp extends LitElement {
   }
 
   _lockDevice() {
+    releaseWakeLock();
     this.activeApp = null;
     this.screen = 'lock';
   }
@@ -777,6 +781,7 @@ export class AgentApp extends LitElement {
   // ── Reset ──
 
   async _resetAgent() {
+    releaseWakeLock();
     this.peerService.destroy();
     this.peerService = new PeerService();
     await storageService.clearProfile();

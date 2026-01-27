@@ -5,11 +5,14 @@
  *                                                                   ↕ scanner sheet (nexus-overlay)
  *                                                                   → lock (on lock action)
  */
-import { LitElement, html, css } from 'https://esm.sh/lit@3';
-import { PeerService } from '../../shared/services/peer-service.js';
+import { LitElement, html } from 'https://esm.sh/lit@3';
 import { storageService } from '../../shared/services/storage-service.js';
-import { MSG, TERM_MSG } from '../../shared/utils/protocol.js';
-import { generateMnemonic, deriveIdentity, encrypt } from '../../shared/utils/crypto.js';
+import { ClockController } from '../../shared/controllers/clock-controller.js';
+import { ToastController } from '../../shared/controllers/toast-controller.js';
+import { ConnectionManager } from './services/connection-manager.js';
+import { VaultService } from './services/vault-service.js';
+import { relativeTime } from '../../shared/utils/format.js';
+import { agentAppStyles } from './styles/app-styles.js';
 import '../../shared/components/nexus-boot.js';
 import '../../shared/components/nexus-scanner.js';
 import '../../shared/components/nexus-avatar.js';
@@ -27,7 +30,6 @@ import '../../shared/components/nexus-markdown.js';
 import '../../shared/components/nexus-view.js';
 import '../../shared/components/nexus-card.js';
 import { icons } from '../../shared/components/nexus-icons.js';
-import { requestWakeLock, releaseWakeLock } from './utils/wakelock.js';
 
 export class AgentApp extends LitElement {
   static properties = {
@@ -39,463 +41,16 @@ export class AgentApp extends LitElement {
     _avatarSrc:        { type: String, state: true },
     _scannerOpen:      { type: Boolean, state: true },
     _connectionStatus: { type: String, state: true },  // offline | connecting | online
-    _clockTime:        { type: String, state: true },
-    _clockDate:        { type: String, state: true },
     _downloads:        { type: Array, state: true },
     _selectedIntel:    { type: Object, state: true },
     _agentId:          { type: String, state: true },
     _identity:         { type: Object, state: true },   // { did, publicKey } or null
-    _vaultOpen:        { type: Boolean, state: true },   // secure vault overlay
+    _vaultOpen:        { type: Boolean, state: true },
     _vaultStep:        { type: String, state: true },    // generate | mnemonic | confirm | done
     _mnemonic:         { type: String, state: true },
   };
 
-  static styles = css`
-    :host {
-      display: block;
-      height: 100vh;
-      height: 100dvh;
-      overflow: hidden;
-      background: var(--nx-bg);
-      color: var(--nx-fg);
-      font-family: var(--nx-font);
-    }
-
-    .agent-app {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-    }
-
-    /* ========== Loading ========== */
-    .loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--nx-fg-dim);
-      font-size: var(--nx-text-sm);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-
-    /* ========== Setup View ========== */
-    .setup-view {
-      position: fixed;
-      inset: 0;
-      background: var(--nx-bg);
-      z-index: 2000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: var(--nx-lg);
-    }
-
-    .setup-title {
-      font-size: 24px;
-      font-weight: bold;
-      color: var(--nx-primary);
-      text-shadow: var(--nx-glow);
-      margin-bottom: var(--nx-xs);
-    }
-
-    .setup-subtitle {
-      font-size: 11px;
-      color: var(--nx-fg-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: var(--nx-xl);
-    }
-
-    .setup-form {
-      width: 100%;
-      max-width: 280px;
-    }
-
-    .setup-form .form-group {
-      margin-bottom: var(--nx-md);
-    }
-
-    .setup-form .form-label {
-      display: block;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--nx-fg-dim);
-      margin-bottom: var(--nx-xs);
-    }
-
-    .setup-badge {
-      display: inline-block;
-      background: var(--nx-primary);
-      color: var(--nx-bg);
-      padding: 4px 12px;
-      font-size: 10px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin: var(--nx-md) 0;
-    }
-
-    /* ========== Lock Screen ========== */
-    .lock-screen {
-      position: fixed;
-      inset: 0;
-      background: var(--nx-bg);
-      z-index: 1500;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .lock-time {
-      font-size: 4rem;
-      font-weight: bold;
-      color: var(--nx-primary);
-      text-shadow: var(--nx-glow-lg);
-      margin-bottom: var(--nx-xs);
-    }
-
-    .lock-date {
-      font-size: 11px;
-      color: var(--nx-fg-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      margin-bottom: var(--nx-xl);
-    }
-
-    .lock-avatar {
-      margin-bottom: var(--nx-md);
-    }
-
-    .lock-codename {
-      font-size: 14px;
-      font-weight: bold;
-      color: var(--nx-fg);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: var(--nx-xl);
-    }
-
-    .lock-status {
-      font-size: 9px;
-      color: var(--nx-fg-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: var(--nx-lg);
-    }
-
-    /* Swipe track */
-    .swipe-track {
-      width: 200px;
-      height: 44px;
-      border: var(--nx-thin) solid var(--nx-primary);
-      display: flex;
-      align-items: center;
-      padding: 4px;
-      position: relative;
-    }
-
-    .swipe-handle {
-      width: 36px;
-      height: 36px;
-      background: var(--nx-primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--nx-bg);
-      font-size: 14px;
-      cursor: pointer;
-      box-shadow: var(--nx-glow);
-      touch-action: none;
-      user-select: none;
-    }
-
-    .swipe-text {
-      position: absolute;
-      width: 100%;
-      text-align: center;
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--nx-fg-muted);
-      pointer-events: none;
-    }
-
-    /* ========== Main UI ========== */
-    .main-ui {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    /* Status bar */
-    .status-bar {
-      height: 36px;
-      background: var(--nx-bg);
-      border-bottom: var(--nx-thin) solid var(--nx-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--nx-md);
-      font-size: 11px;
-      flex-shrink: 0;
-    }
-
-    .status-bar .system-name {
-      display: flex;
-      align-items: center;
-      gap: var(--nx-xs);
-      font-weight: bold;
-      letter-spacing: 0.1em;
-      color: var(--nx-primary);
-    }
-
-    .status-bar .clock {
-      color: var(--nx-fg-dim);
-    }
-
-    .disconnect-btn {
-      --nx-fg-dim: var(--nx-danger, #ff4444);
-    }
-
-    /* Main area */
-    .main-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: var(--nx-lg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* Icon grid */
-    .icon-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--nx-lg);
-      max-width: 300px;
-      justify-items: center;
-    }
-
-    /* Profile content */
-    .profile-card {
-      text-align: center;
-      padding: var(--nx-md);
-    }
-
-    .profile-codename {
-      font-size: 20px;
-      font-weight: bold;
-      margin-top: var(--nx-md);
-    }
-
-    .profile-level {
-      font-size: 10px;
-      color: var(--nx-fg-dim);
-      text-transform: uppercase;
-    }
-
-    .profile-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--nx-md);
-      text-align: center;
-    }
-
-    nexus-card {
-      margin-top: var(--nx-lg);
-    }
-
-    .stat-value {
-      font-size: 20px;
-      font-weight: bold;
-      color: var(--nx-primary);
-    }
-
-    .stat-label {
-      font-size: 9px;
-      color: var(--nx-fg-muted);
-      text-transform: uppercase;
-    }
-
-    /* Intel list */
-    .intel-item {
-      border: var(--nx-thin) solid var(--nx-border);
-      padding: var(--nx-md);
-      margin-bottom: var(--nx-sm);
-      cursor: pointer;
-      transition: border-color 0.15s;
-    }
-
-    .intel-item:active {
-      border-color: var(--nx-primary);
-    }
-
-    .intel-item-header {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: var(--nx-xs);
-    }
-
-    .intel-item-name {
-      font-size: 12px;
-      font-weight: bold;
-    }
-
-    .intel-item-badge {
-      font-size: 9px;
-      padding: 2px 6px;
-      border: var(--nx-thin) solid var(--nx-primary);
-      text-transform: uppercase;
-    }
-
-    .intel-item-meta {
-      font-size: 10px;
-      color: var(--nx-fg-muted);
-    }
-
-    /* Settings */
-    .settings-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--nx-md) 0;
-      border-bottom: var(--nx-thin) solid var(--nx-border);
-    }
-
-    .settings-label { font-size: 12px; }
-    .settings-value { font-size: 11px; color: var(--nx-fg-dim); }
-
-    /* Comms empty state */
-    .comms-empty {
-      text-align: center;
-      padding: var(--nx-xl);
-      color: var(--nx-fg-muted);
-    }
-
-    .comms-empty svg {
-      margin-bottom: var(--nx-md);
-      opacity: 0.4;
-    }
-
-    .comms-empty-title {
-      font-size: 11px;
-      text-transform: uppercase;
-    }
-
-    .comms-empty-sub {
-      font-size: 10px;
-      margin-top: var(--nx-sm);
-    }
-
-    /* Scanner content */
-    .scanner-content {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: var(--nx-lg);
-    }
-
-    .scanner-hint {
-      font-size: 11px;
-      color: var(--nx-fg-dim);
-      text-align: center;
-      margin-top: var(--nx-md);
-    }
-
-    /* ========== Vault Activation ========== */
-    .vault-content {
-      padding: var(--nx-lg);
-      text-align: center;
-    }
-
-    .vault-title {
-      font-size: 14px;
-      font-weight: bold;
-      color: var(--nx-primary);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: var(--nx-sm);
-    }
-
-    .vault-desc {
-      font-size: 11px;
-      color: var(--nx-fg-dim);
-      margin-bottom: var(--nx-lg);
-      line-height: 1.6;
-    }
-
-    .vault-warning {
-      font-size: 10px;
-      color: var(--nx-danger, #ff4444);
-      border: var(--nx-thin) solid var(--nx-danger, #ff4444);
-      padding: var(--nx-sm) var(--nx-md);
-      margin-bottom: var(--nx-lg);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .mnemonic-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--nx-sm);
-      margin-bottom: var(--nx-lg);
-      text-align: left;
-    }
-
-    .mnemonic-word {
-      font-size: 12px;
-      padding: var(--nx-xs) var(--nx-sm);
-      border: var(--nx-thin) solid var(--nx-border);
-      background: var(--nx-bg-raised);
-    }
-
-    .mnemonic-word .num {
-      color: var(--nx-fg-muted);
-      font-size: 9px;
-      margin-right: var(--nx-xs);
-    }
-
-    .vault-did {
-      font-size: 9px;
-      color: var(--nx-primary);
-      word-break: break-all;
-      padding: var(--nx-sm);
-      border: var(--nx-thin) solid var(--nx-primary);
-      margin-bottom: var(--nx-md);
-      text-align: left;
-      font-family: var(--nx-font);
-    }
-
-    .vault-did-label {
-      font-size: 9px;
-      color: var(--nx-fg-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: var(--nx-xs);
-    }
-
-    .vault-check {
-      font-size: 32px;
-      color: var(--nx-primary);
-      text-shadow: var(--nx-glow-lg);
-      margin-bottom: var(--nx-md);
-    }
-
-    /* Override nexus-dock to sit in the flex layout */
-    nexus-dock {
-      position: relative;
-      left: auto;
-      right: auto;
-      bottom: auto;
-      z-index: auto;
-      pointer-events: auto;
-    }
-  `;
+  static styles = agentAppStyles;
 
   constructor() {
     super();
@@ -507,8 +62,6 @@ export class AgentApp extends LitElement {
     this._avatarSrc = '';
     this._scannerOpen = false;
     this._connectionStatus = 'offline';
-    this._clockTime = '00:00';
-    this._clockDate = '';
     this._downloads = [];
     this._selectedIntel = null;
     this._agentId = '';
@@ -516,9 +69,17 @@ export class AgentApp extends LitElement {
     this._vaultOpen = false;
     this._vaultStep = 'generate';
     this._mnemonic = '';
-    this._clockInterval = null;
     this._swipeState = { active: false, startX: 0 };
-    this.peerService = new PeerService();
+
+    // Controllers
+    this._clock = new ClockController(this);
+    this._toast = new ToastController(this);
+
+    // Services
+    this._connectionManager = new ConnectionManager();
+    this._vaultService = new VaultService();
+
+    this._setupConnectionEvents();
 
     // Parse session from URL
     const params = new URLSearchParams(window.location.search);
@@ -527,69 +88,71 @@ export class AgentApp extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    this._startClock();
     await this._init();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    releaseWakeLock();
-    if (this._clockInterval) clearInterval(this._clockInterval);
-    this.peerService.destroy();
+    this._connectionManager.destroy();
+  }
+
+  // ── Connection events ──
+
+  _setupConnectionEvents() {
+    this._connectionManager.addEventListener('status-change', (e) => {
+      const oldStatus = this._connectionStatus;
+      const { status } = e.detail;
+      this._connectionStatus = status;
+
+      if (status === 'online' && oldStatus !== 'online') {
+        this._toast.show('Terminal connected', 'success');
+      } else if (status === 'offline' && oldStatus !== 'offline') {
+        this._toast.show('Terminal disconnected', 'warning');
+      }
+    });
+
+    this._connectionManager.addEventListener('file-received', (e) => {
+      this._downloads = e.detail.downloads;
+      this._toast.show(`Intel acquired: ${e.detail.filename}`, 'success');
+    });
+
+    this._connectionManager.addEventListener('error', (e) => {
+      if (e.detail.context === 'save-download') {
+        this._toast.show('Failed to save intel', 'error');
+      }
+    });
+
+    this._connectionManager.addEventListener('mission-trigger', (e) => {
+      if (e.detail.mission === 'SECURE_VAULT' && !this._identity) {
+        this._toast.show('Vault breach detected — secure your identity', 'warning');
+        this._openSecureVault();
+      }
+    });
   }
 
   // ── Init ──
 
   async _init() {
-    // Always show boot splash first; store profile for routing after boot
     this._loadedProfile = await storageService.getProfile();
     this.screen = 'boot';
   }
 
   async _onBootComplete() {
     if (!this._loadedProfile) {
-      // New user — go to setup
       this.screen = 'setup';
     } else {
       this.profile = this._loadedProfile;
       this._agentId = 'AG-' + Math.floor(1000 + Math.random() * 9000) + '-X';
 
-      // Load identity if exists
-      try {
-        const id = await storageService.getIdentity();
-        if (id) this._identity = { did: id.did, publicKey: id.publicKey };
-      } catch { /* empty */ }
+      this._identity = await this._vaultService.loadIdentity();
 
       if (this.sessionId) {
-        // Has session from QR URL — skip lock, go to main and auto-connect
         this.screen = 'main';
         this._connectToTerminal();
         try { this._downloads = await storageService.getDownloads(); } catch { /* empty */ }
       } else {
         this.screen = 'lock';
       }
-    }
-  }
-
-  // ── Clock ──
-
-  _startClock() {
-    this._updateClock();
-    this._clockInterval = setInterval(() => this._updateClock(), 1000);
-  }
-
-  _updateClock() {
-    const now = new Date();
-    this._clockTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    this._clockDate = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-  }
-
-  // ── Toast helper ──
-
-  _toast(message, variant = 'info') {
-    const container = this.renderRoot.querySelector('nexus-toast-container');
-    if (container) {
-      container.add(message, { variant, duration: 3000 });
     }
   }
 
@@ -617,7 +180,7 @@ export class AgentApp extends LitElement {
     this.profile = profile;
     this._agentId = 'AG-' + Math.floor(1000 + Math.random() * 9000) + '-X';
 
-    this._toast(`Agent ${codename} initialized`, 'success');
+    this._toast.show(`Agent ${codename} initialized`, 'success');
     this.screen = 'lock';
   }
 
@@ -656,8 +219,6 @@ export class AgentApp extends LitElement {
 
   async _unlock() {
     this.screen = 'main';
-
-    // Load downloads
     try {
       this._downloads = await storageService.getDownloads();
     } catch { /* empty */ }
@@ -679,7 +240,6 @@ export class AgentApp extends LitElement {
   }
 
   _lockDevice() {
-    releaseWakeLock();
     this.activeApp = null;
     this.screen = 'lock';
   }
@@ -698,7 +258,6 @@ export class AgentApp extends LitElement {
     this._scannerOpen = false;
     const scannedData = e.detail.data;
 
-    // Extract session ID from URL or use raw data
     try {
       const url = new URL(scannedData);
       const session = url.searchParams.get('session');
@@ -716,60 +275,19 @@ export class AgentApp extends LitElement {
   // ── Connection ──
 
   _connectToTerminal() {
-    this._connectionStatus = 'connecting';
+    this._connectionManager.connect(this.sessionId, {
+      profile: this.profile,
+      did: this._identity?.did || null,
+    });
+  }
 
-    if (!this._peerListenersBound) {
-      this._peerListenersBound = true;
+  _disconnectTerminal() {
+    this._connectionManager.disconnect();
+    this.sessionId = null;
 
-      this.peerService.addEventListener('connected', () => {
-        this._connectionStatus = 'online';
-        requestWakeLock();
-        this._toast('Terminal connected', 'success');
-
-        this.peerService.send({
-          type: MSG.INIT_STATE,
-          profile: this.profile,
-          did: this._identity?.did || null,
-        });
-      });
-
-      this.peerService.addEventListener('disconnected', () => {
-        this._connectionStatus = 'offline';
-        releaseWakeLock();
-        this._toast('Terminal disconnected', 'warning');
-      });
-
-      this.peerService.addEventListener('data', async (e) => {
-        const { data } = e.detail;
-        if (data.type === 'FILE_CONTENT') {
-          try {
-            await storageService.saveDownload({
-              filename: data.filename,
-              path: data.path,
-              content: data.content,
-            });
-            this._downloads = await storageService.getDownloads();
-            this._toast(`Intel acquired: ${data.filename}`, 'success');
-          } catch (err) {
-            console.error('[Agent] Failed to save download:', err);
-            this._toast('Failed to save intel', 'error');
-          }
-        }
-        if (data.type === TERM_MSG.MISSION_TRIGGER && data.mission === 'SECURE_VAULT') {
-          if (!this._identity) {
-            this._toast('Vault breach detected — secure your identity', 'warning');
-            this._openSecureVault();
-          }
-        }
-      });
-
-      this.peerService.addEventListener('error', e => {
-        console.error('[Agent] Peer error:', e.detail.error);
-        this._connectionStatus = 'offline';
-      });
-    }
-
-    this.peerService.connectAsAgent(this.sessionId);
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    window.history.replaceState({}, '', url);
   }
 
   // ── Vault Activation (DID) ──
@@ -787,12 +305,11 @@ export class AgentApp extends LitElement {
   async _generateVaultKeys() {
     this._vaultStep = 'generating';
     try {
-      const mnemonic = await generateMnemonic();
-      this._mnemonic = mnemonic;
+      this._mnemonic = await this._vaultService.generateKeys();
       this._vaultStep = 'mnemonic';
     } catch (err) {
       console.error('[Agent] Key generation failed:', err);
-      this._toast('Key generation failed', 'error');
+      this._toast.show('Key generation failed', 'error');
       this._vaultStep = 'generate';
     }
   }
@@ -804,65 +321,30 @@ export class AgentApp extends LitElement {
   async _activateVault() {
     this._vaultStep = 'activating';
     try {
-      const identity = await deriveIdentity(this._mnemonic);
-
-      // Encrypt private key with storage key before persisting
-      const encryptedKey = await encrypt(identity.storageKey, identity.privateKey);
-
-      await storageService.saveIdentity({
-        did: identity.did,
-        publicKey: identity.publicKey,
-        encryptedKey,
-        storageKey: identity.storageKey,
-      });
-
-      // Update profile with DID and bump clearance
-      await storageService.updateDid(identity.did);
-      const newLevel = Math.max((this.profile?.level || 1) + 1, 2);
-      await storageService.updateLevel(newLevel);
-
-      this.profile = { ...this.profile, did: identity.did, level: newLevel };
-      this._identity = { did: identity.did, publicKey: identity.publicKey };
-
+      const result = await this._vaultService.activate(this._mnemonic, this.profile);
+      this.profile = result.profile;
+      this._identity = result.identity;
       this._vaultStep = 'done';
-      this._toast('Vault secured — DID activated', 'success');
+      this._toast.show('Vault secured — DID activated', 'success');
     } catch (err) {
       console.error('[Agent] Vault activation failed:', err);
-      this._toast('Vault activation failed', 'error');
+      this._toast.show('Vault activation failed', 'error');
       this._vaultStep = 'confirm';
     }
   }
 
   _finishVault() {
     this._vaultOpen = false;
-    this._mnemonic = '';  // Clear sensitive data from memory
-  }
-
-  // ── Disconnect ──
-
-  _disconnectTerminal() {
-    releaseWakeLock();
-    this.peerService.destroy();
-    this.peerService = new PeerService();
-    this._peerListenersBound = false;
-    this._connectionStatus = 'offline';
-    this.sessionId = null;
-
-    // Clear session from URL
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    window.history.replaceState({}, '', url);
-
-    this._toast('Terminal disconnected', 'info');
+    this._mnemonic = '';
   }
 
   // ── Reset ──
 
   async _resetAgent() {
-    releaseWakeLock();
-    this.peerService.destroy();
-    this.peerService = new PeerService();
-    this._peerListenersBound = false;
+    this._connectionManager.destroy();
+    this._connectionManager = new ConnectionManager();
+    this._setupConnectionEvents();
+
     await storageService.clearProfile();
     await storageService.clearDownloads();
     await storageService.clearIdentity();
@@ -878,7 +360,6 @@ export class AgentApp extends LitElement {
     this._mnemonic = '';
     this.screen = 'setup';
 
-    // Clear session from URL
     const url = new URL(window.location);
     url.searchParams.delete('session');
     window.history.replaceState({}, '', url);
@@ -982,8 +463,8 @@ export class AgentApp extends LitElement {
 
     return html`
       <div class="lock-screen">
-        <div class="lock-time">${this._clockTime}</div>
-        <div class="lock-date">${this._clockDate}</div>
+        <div class="lock-time">${this._clock.time}</div>
+        <div class="lock-date">${this._clock.date}</div>
 
         <div class="lock-avatar">
           <nexus-avatar
@@ -1037,7 +518,7 @@ export class AgentApp extends LitElement {
             ></nexus-status-badge>
             <span>NEXUS</span>
           </div>
-          <div class="clock">${this._clockTime}</div>
+          <div class="clock">${this._clock.time}</div>
         </div>
 
         <!-- Main Area (icon grid) -->
@@ -1178,7 +659,7 @@ export class AgentApp extends LitElement {
                 <nexus-list-item
                   icon="file"
                   label=${dl.filename}
-                  meta="${this._formatTime(dl.downloadedAt)} — ${dl.content?.length || 0} bytes"
+                  meta="${relativeTime(dl.downloadedAt)} — ${dl.content?.length || 0} bytes"
                 ></nexus-list-item>
               `)}
             </nexus-list>
@@ -1358,18 +839,6 @@ export class AgentApp extends LitElement {
         </div>
       </nexus-view>
     `;
-  }
-
-  // ── Helpers ──
-
-  _formatTime(timestamp) {
-    if (!timestamp) return 'Unknown';
-    const diff = Date.now() - timestamp;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
   }
 }
 
